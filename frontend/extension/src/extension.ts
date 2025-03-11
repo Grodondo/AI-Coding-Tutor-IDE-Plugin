@@ -10,7 +10,15 @@ const aiResponseDecorationType = vscode.window.createTextEditorDecorationType({
 });
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('Extension "ai-coding-tutor" is now active!');
+    //console.log('Extension "ai-coding-tutor" is now active!');
+    console.log('---- ACTIVATION STARTED ----');
+    console.log('Extension context:', context);
+
+    let disposable = vscode.commands.registerCommand('ai-coding-tutor.hello', () => {
+        vscode.window.showInformationMessage('AI Suggestion command executed');
+      });
+    
+    context.subscriptions.push(disposable);
 
     // Create an event emitter for our CodeLens provider to refresh on selection changes.
     const codeLensEmitter = new vscode.EventEmitter<void>();

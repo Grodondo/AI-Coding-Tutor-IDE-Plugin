@@ -9,13 +9,29 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:golang",
+    "onLanguage:java",
+    "onLanguage:python"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "ai-coding-tutor.activate",
-        "title": "Activate AI Tutor"
+        "command": "ai-coding-tutor.getSuggestion",
+        "title": "Get AI Suggestion"
+      },
+      {
+        "command": "ai-coding-tutor.getHint",
+        "title": "Get AI Hint"
+      },
+      {
+        "command": "ai-coding-tutor.getBestPractice",
+        "title": "Get AI Best Practice"
+      },
+      {
+        "command": "ai-coding-tutor.hello",
+        "title": "Hello"
       }
     ]
   },

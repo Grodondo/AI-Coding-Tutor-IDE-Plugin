@@ -1,20 +1,20 @@
 # Título: AI Coding Tutor
 
 ## Breve descripción
-Proyecto multidisciplinar que integra una extensión de VS Code, un servicio backend en Go y componentes de IA en Python para ofrecer sugerencias y mejoras en tiempo real en el código. La extensión monitorea los cambios y, mediante una interfaz intuitiva, permite solicitar recomendaciones que se procesan en el backend y se devuelven a través de modelos de IA, mejorando la calidad y eficiencia del desarrollo. Además, se comparten definiciones gRPC y se utilizan contenedores Docker para facilitar el despliegue y la integración.
+Proyecto educativo innovador que integra una extensión de VS Code, un servicio backend en Go y componentes de IA en Python para proporcionar sugerencias, explicaciones y análisis en tiempo real sobre el código. La extensión está diseñada para facilitar el aprendizaje y la enseñanza de buenas prácticas de programación, ayudando a los usuarios a entender conceptos clave y a mejorar sus habilidades de codificación. Además, se utilizan definiciones gRPC y contenedores Docker para simplificar el despliegue y la integración, creando un entorno colaborativo y escalable enfocado en el aprendizaje.
 
 ## Servicios, herramientas y aplicaciones implicadas en el proyecto
 - **Frontend:**
-  - Extensión de VS Code desarrollada en TypeScript.
+  - Extensión de VS Code desarrollada en TypeScript, centrada en la enseñanza y la mejora de habilidades de programación.
   - Herramientas de Node.js, npm y Yeoman para la generación y gestión del proyecto.
-  - (Opcional) Sitio web complementario bajo el mismo directorio `frontend/`, facilitando la gestión de proyectos de interfaz de usuario.
+  - (Opcional) Sitio web complementario para recursos educativos adicionales, ubicado en `frontend/website`.
 
 - **Backend:**
-  - Servicio en Go para procesar solicitudes y orquestar la comunicación entre la extensión y los modelos de IA.
+  - Servicio en Go para procesar solicitudes y coordinar la comunicación entre la extensión y los componentes de IA, orientado a ofrecer explicaciones y sugerencias educativas.
 
 - **Inteligencia Artificial:**
-  - Componentes en Python para análisis semántico y generación de sugerencias.
-  - Uso de frameworks y bibliotecas de Machine Learning.
+  - Componentes en Python para análisis semántico y generación de recomendaciones formativas.
+  - Uso de frameworks y bibliotecas de Machine Learning para modelar comportamientos de enseñanza.
   - Entorno virtual dedicado y gestión de dependencias a través de `requirements.txt`.
 
 - **Comunicación y Contratos:**
@@ -22,10 +22,10 @@ Proyecto multidisciplinar que integra una extensión de VS Code, un servicio bac
 
 - **Contenerización y Despliegue:**
   - Docker para configurar entornos y facilitar el despliegue de cada componente.
-  - Servicios en la nube (por ejemplo, AWS, Google Cloud o Azure) para hospedar el backend y los servicios de IA, garantizando escalabilidad y alta disponibilidad.
+  - Servicios en la nube (por ejemplo, AWS, Google Cloud o Azure) para hospedar el backend y los servicios de IA, garantizando escalabilidad, alta disponibilidad y un entorno educativo robusto.
 
 - **Integración y CI/CD:**
-  - Herramientas de integración continua y despliegue (CI/CD) para automatizar tests y despliegues en un entorno multi-servicio.
+  - Herramientas de integración continua y despliegue (CI/CD) para automatizar pruebas y despliegues en un entorno multi-servicio.
 
 
 project-root/
