@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"fmt"
+
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/models"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
 	"github.com/gin-gonic/gin"
@@ -15,6 +17,7 @@ type QueryRequest struct {
 
 // QueryHandler returns a Gin handler for processing queries
 func QueryHandler(aiService *services.AIService, dbService *services.DBService) gin.HandlerFunc {
+	fmt.Printf("QueryHandler: aiService=%v, dbService=%v\n", aiService, dbService)
 	return func(c *gin.Context) {
 		var req QueryRequest
 		if err := c.BindJSON(&req); err != nil {
@@ -40,11 +43,13 @@ func QueryHandler(aiService *services.AIService, dbService *services.DBService) 
 		}
 
 		// Get AI response
-		response, err := aiService.GetResponseGPT(prompt)
+		response, err := aiService.GetResponseGroq(prompt)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to get AI response"})
 			return
 		}
+
+		fmt.Printf("QueryHandler: response=%s\n", response)
 
 		// Store in database
 		query := &models.Query{

@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"fmt"
+
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
 	"github.com/gin-gonic/gin"
 )
@@ -13,6 +15,7 @@ type FeedbackRequest struct {
 
 // FeedbackHandler returns a Gin handler for processing feedback
 func FeedbackHandler(dbService *services.DBService) gin.HandlerFunc {
+	fmt.Printf("FeedbackHandler: dbService=%v\n", dbService)
 	return func(c *gin.Context) {
 		var req FeedbackRequest
 		if err := c.BindJSON(&req); err != nil {

@@ -2,6 +2,7 @@ package services
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/models"
 	_ "github.com/lib/pq" // PostgreSQL driver
@@ -26,6 +27,7 @@ func NewDBService(dsn string) (*DBService, error) {
 
 // CreateQuery inserts a new query into the database
 func (s *DBService) CreateQuery(q *models.Query) error {
+	fmt.Printf("CreateQuery: q=%v\n", q)
 	_, err := s.db.Exec(
 		"INSERT INTO queries (id, query, level, response, feedback) VALUES ($1, $2, $3, $4, $5)",
 		q.ID, q.Query, q.Level, q.Response, q.Feedback,
@@ -35,6 +37,7 @@ func (s *DBService) CreateQuery(q *models.Query) error {
 
 // UpdateFeedback updates the feedback for a given query ID
 func (s *DBService) UpdateFeedback(id, feedback string) error {
+	fmt.Printf("UpdateFeedback: id=%s, feedback=%s\n", id, feedback)
 	_, err := s.db.Exec("UPDATE queries SET feedback = $1 WHERE id = $2", feedback, id)
 	return err
 }

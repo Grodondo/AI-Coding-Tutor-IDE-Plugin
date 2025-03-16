@@ -1,6 +1,6 @@
 module github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend
 
-go 1.24.0
+go 1.23
 
 require (
 	github.com/bytedance/sonic v1.11.6 // indirect

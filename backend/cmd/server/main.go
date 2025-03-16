@@ -10,6 +10,8 @@ import (
 )
 
 func main() {
+	fmt.Println("Starting server...")
+
 	// Read environment variables
 	dbHost := os.Getenv("DB_HOST")
 	dbPort := os.Getenv("DB_PORT")
@@ -17,6 +19,7 @@ func main() {
 	dbPassword := os.Getenv("DB_PASSWORD")
 	dbName := os.Getenv("DB_NAME")
 	aiAPIKey := os.Getenv("AI_API_KEY")
+	fmt.Printf("AI_API_KEY: %s\n", os.Getenv("AI_API_KEY"))
 
 	// Construct DSN
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
