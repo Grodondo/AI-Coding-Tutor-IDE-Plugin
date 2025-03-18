@@ -11,10 +11,10 @@
 			"request": "launch",
 			"runtimeExecutable": "${execPath}",
 			"args": [
-				"--extensionDevelopmentPath=${workspaceFolder}/frontend"
+				"--extensionDevelopmentPath=${workspaceFolder}/frontend/extension"
 			],
 			"outFiles": [
-				"${workspaceFolder}/frontend/dist/**/*.js"
+				"${workspaceFolder}/frontend/extension/dist/**/*.js"
 			],
 			"preLaunchTask": "npm: compile"
 		}

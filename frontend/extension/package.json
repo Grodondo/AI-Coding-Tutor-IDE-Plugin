@@ -12,7 +12,8 @@
   "activationEvents": [
     "onLanguage:golang",
     "onLanguage:java",
-    "onLanguage:python"
+    "onLanguage:python",
+    "*"
   ],
   "main": "./dist/extension.js",
   "contributes": {

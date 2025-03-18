@@ -35,6 +35,19 @@
 				"npm: watch-tests"
 			],
 			"problemMatcher": []
+		},
+		{
+			"type": "go",
+			"label": "go: build package",
+			"command": "build",
+			"args": [
+				"${fileDirname}"
+			],
+			"problemMatcher": [
+				"$go"
+			],
+			"group": "build",
+			"detail": "cd c:\\dev\\TFG\\AI-Coding-Tutor-IDE-Plugin; go build ${fileDirname}"
 		}
 	]
 }

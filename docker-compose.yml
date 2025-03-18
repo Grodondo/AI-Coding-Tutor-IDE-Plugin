@@ -20,5 +20,6 @@ services:
       - POSTGRES_DB=mydb
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d  # Mount the initdb folder
 volumes:
   pgdata:
