@@ -37,6 +37,7 @@ func main() {
 
 	// Define routes
 	router.POST("/query", handlers.QueryHandler(aiService, dbService))
+	router.POST("/analyze", handlers.AnalyzeHandler(aiService, dbService))
 	router.POST("/feedback", handlers.FeedbackHandler(dbService))
 
 	// Run server

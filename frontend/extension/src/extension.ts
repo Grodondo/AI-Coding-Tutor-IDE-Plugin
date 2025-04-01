@@ -1,139 +1,234 @@
 import * as vscode from 'vscode';
+import fetch from 'node-fetch';
 
-// Decoration type for inline AI response
 const aiResponseDecorationType = vscode.window.createTextEditorDecorationType({
     after: {
         color: new vscode.ThemeColor('descriptionForeground'),
         fontStyle: 'italic',
-        margin: '0 0 0 1em'
+        margin: '0 0 0 1em',
+        textDecoration: 'none; cursor: pointer;'
     }
 });
 
+function getBackendUrl(): string {
+    const config = vscode.workspace.getConfiguration('aiCodingTutor');
+    return config.get('backendUrl', 'http://localhost:8080');
+}
+
 export function activate(context: vscode.ExtensionContext) {
-    //console.log('Extension "ai-coding-tutor" is now active!');
     console.log('---- ACTIVATION STARTED ----');
-    console.log('Extension context:', context);
 
-    let disposable = vscode.commands.registerCommand('ai-coding-tutor.hello', () => {
-        vscode.window.showInformationMessage('AI Suggestion command executed');
-      });
-    
-    context.subscriptions.push(disposable);
+    let isActive = true;
+    let proficiency = context.globalState.get('ai-coding-tutor.proficiency', 'easy');
+    let analysisInterval: NodeJS.Timeout | undefined;
 
-    // Create an event emitter for our CodeLens provider to refresh on selection changes.
     const codeLensEmitter = new vscode.EventEmitter<void>();
+    const suggestionProvider = new SuggestionCodeLensProvider(codeLensEmitter);
 
-    // Register our CodeLens provider so a button appears on the active line.
     context.subscriptions.push(
-        vscode.languages.registerCodeLensProvider({ scheme: 'file' }, new SuggestionCodeLensProvider(codeLensEmitter))
+        vscode.languages.registerCodeLensProvider({ scheme: 'file' }, suggestionProvider)
     );
 
-    // Refresh CodeLens whenever the active selection changes.
     context.subscriptions.push(
         vscode.window.onDidChangeTextEditorSelection(() => codeLensEmitter.fire())
     );
 
-    // Register the command that will be triggered when the CodeLens button is clicked.
+    const treeDataProvider = new AiTutorTreeDataProvider(() => ({ isActive, proficiency }));
     context.subscriptions.push(
-        vscode.commands.registerCommand('ai-coding-tutor.getSuggestion', async () => {
-            const editor = vscode.window.activeTextEditor;
-            if (!editor) {
-                return;
+        vscode.window.registerTreeDataProvider('aiTutorView', treeDataProvider),
+        vscode.commands.registerCommand('ai-coding-tutor.selectLevel', async () => {
+            const level = await vscode.window.showQuickPick(['easy', 'medium', 'expert'], {
+                placeHolder: 'Select your proficiency level'
+            });
+            if (level) {
+                proficiency = level;
+                context.globalState.update('ai-coding-tutor.proficiency', level);
+                treeDataProvider.refresh();
+                vscode.window.showInformationMessage(`Proficiency set to ${level}`);
             }
+        }),
+        vscode.commands.registerCommand('ai-coding-tutor.toggleActivation', () => {
+            isActive = !isActive;
+            treeDataProvider.refresh();
+            if (isActive) startPeriodicAnalysis();
+            else stopPeriodicAnalysis();
+            vscode.window.showInformationMessage(`Extension ${isActive ? 'activated' : 'deactivated'}`);
+        })
+    );
 
-            const cursorLine = editor.selection.active.line;
-            const lineText = editor.document.lineAt(cursorLine).text;
+    context.subscriptions.push(
+        vscode.commands.registerCommand('ai-coding-tutor.getSuggestion', async (lineNumber?: number) => {
+            if (!isActive) return;
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) return;
 
-            // Show a loading decoration.
-            editor.setDecorations(aiResponseDecorationType, [createLoadingDecoration(cursorLine)]);
+            const targetLine = lineNumber ?? editor.selection.active.line;
+            const lineText = editor.document.lineAt(targetLine).text.trim();
 
+            editor.setDecorations(aiResponseDecorationType, [createLoadingDecoration(targetLine)]);
             try {
-                // Send the current line to the backend.
-                const aiResponse = await handleBackendRequest(lineText);
-                // Update decoration with the response.
-                editor.setDecorations(aiResponseDecorationType, [createResponseDecoration(cursorLine, aiResponse)]);
-            } catch (error) {
-                vscode.window.showErrorMessage(
-                    `AI request failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+                const aiResponse = await fetchSuggestionFromBackend(lineText, proficiency);
+                const decoration = createResponseDecoration(targetLine, aiResponse);
+                decoration.hoverMessage = new vscode.MarkdownString(
+                    `${aiResponse}\n\nWas this helpful? [Yes](command:ai-coding-tutor.feedback?${encodeURIComponent(JSON.stringify({ response: aiResponse, helpful: true }))}) | [No](command:ai-coding-tutor.feedback?${encodeURIComponent(JSON.stringify({ response: aiResponse, helpful: false }))})`
                 );
+                editor.setDecorations(aiResponseDecorationType, [decoration]);
+            } catch (error) {
+                editor.setDecorations(aiResponseDecorationType, []);
+                vscode.window.showErrorMessage(`Failed to get suggestion: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
         })
     );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('ai-coding-tutor.feedback', async (args: { response: string; helpful: boolean }) => {
+            await sendFeedbackToBackend(args.response, args.helpful);
+            vscode.window.showInformationMessage(`Thanks for your feedback!`);
+        })
+    );
+
+    function startPeriodicAnalysis() {
+        if (analysisInterval) return;
+        analysisInterval = setInterval(async () => {
+            if (!isActive || !vscode.window.activeTextEditor) return;
+            const editor = vscode.window.activeTextEditor;
+            const document = editor.document;
+            const fullText = document.getText();
+            const suggestions = await fetchFullCodeSuggestions(fullText, proficiency);
+            suggestionProvider.updateSuggestions(suggestions);
+            codeLensEmitter.fire();
+        }, 15000);
+    }
+
+    function stopPeriodicAnalysis() {
+        if (analysisInterval) {
+            clearInterval(analysisInterval);
+            analysisInterval = undefined;
+            suggestionProvider.updateSuggestions([]);
+            codeLensEmitter.fire();
+        }
+    }
+
+    if (isActive) startPeriodicAnalysis();
+
+    context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(() => {
+        suggestionProvider.updateSuggestions([]);
+        codeLensEmitter.fire();
+    }));
 }
 
-// CodeLens provider that places a clickable button on the active line.
+class AiTutorTreeDataProvider implements vscode.TreeDataProvider<AiTutorTreeItem> {
+    private _onDidChangeTreeData = new vscode.EventEmitter<AiTutorTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+    private getState: () => { isActive: boolean; proficiency: string };
+
+    constructor(getState: () => { isActive: boolean; proficiency: string }) {
+        this.getState = getState;
+    }
+
+    refresh() {
+        this._onDidChangeTreeData.fire();
+    }
+
+    getTreeItem(element: AiTutorTreeItem): vscode.TreeItem {
+        return element;
+    }
+
+    getChildren(element?: AiTutorTreeItem): AiTutorTreeItem[] {
+        if (element) return [];
+        const { isActive, proficiency } = this.getState();
+        return [
+            new AiTutorTreeItem(`Status: ${isActive ? 'Active' : 'Inactive'}`, 'ai-coding-tutor.toggleActivation'),
+            new AiTutorTreeItem(`Level: ${proficiency}`, 'ai-coding-tutor.selectLevel')
+        ];
+    }
+}
+
+class AiTutorTreeItem extends vscode.TreeItem {
+    constructor(label: string, commandId: string) {
+        super(label, vscode.TreeItemCollapsibleState.None);
+        this.command = { command: commandId, title: label };
+    }
+}
+
 class SuggestionCodeLensProvider implements vscode.CodeLensProvider {
-    private emitter: vscode.EventEmitter<void>;
+    private suggestions: { line: number; message: string }[] = [];
+
+    constructor(private emitter: vscode.EventEmitter<void>) {
+        this.onDidChangeCodeLenses = emitter.event;
+    }
+
     onDidChangeCodeLenses?: vscode.Event<void>;
 
-    constructor(emitter: vscode.EventEmitter<void>) {
-        this.emitter = emitter;
-        this.onDidChangeCodeLenses = this.emitter.event;
+    updateSuggestions(suggestions: { line: number; message: string }[]) {
+        this.suggestions = suggestions;
     }
 
-    provideCodeLenses(document: vscode.TextDocument, token: vscode.CancellationToken): vscode.CodeLens[] {
+    provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
         const editor = vscode.window.activeTextEditor;
-        // Only show the button if the document matches the active editor.
-        if (!editor || editor.document.uri.toString() !== document.uri.toString()) {
-            return [];
-        }
-        const cursorLine = editor.selection.active.line;
-        const line = document.lineAt(cursorLine);
-        // Create a range at the end of the line.
-        const range = new vscode.Range(cursorLine, line.range.end.character, cursorLine, line.range.end.character);
-        const command: vscode.Command = {
-            title: '$(lightbulb) Get Suggestion',
-            tooltip: 'Click to get AI suggestion for this line',
-            command: 'ai-coding-tutor.getSuggestion'
-        };
-        return [new vscode.CodeLens(range, command)];
+        if (!editor || editor.document.uri.toString() !== document.uri.toString()) return [];
+
+        return this.suggestions.map(({ line, message }) => {
+            const range = document.lineAt(line).range;
+            return new vscode.CodeLens(range, {
+                title: '$(lightbulb) Get Suggestion',
+                tooltip: message,
+                command: 'ai-coding-tutor.getSuggestion',
+                arguments: [line]
+            });
+        });
     }
 }
 
-// Helper: Create a decoration showing a loading spinner and message.
 function createLoadingDecoration(lineNumber: number): vscode.DecorationOptions {
     return {
         range: new vscode.Range(lineNumber, 0, lineNumber, 0),
         renderOptions: {
-            after: {
-                contentText: ' $(sync~spin) Analyzing...',
-                color: new vscode.ThemeColor('descriptionForeground')
-            }
+            after: { contentText: ' $(sync~spin) Analyzing...', color: new vscode.ThemeColor('descriptionForeground') }
         }
     };
 }
 
-// Helper: Create a decoration that shows the AI response.
 function createResponseDecoration(lineNumber: number, response: string): vscode.DecorationOptions {
     return {
-        range: new vscode.Range(lineNumber, 1, lineNumber, 1),
+        range: new vscode.Range(lineNumber, 0, lineNumber, 0),
         renderOptions: {
-            after: {
-                contentText: ` $(lightbulb) ${response}`,
-                color: new vscode.ThemeColor('descriptionForeground')
-            }
+            after: { contentText: ` $(lightbulb) ${response}` }
         }
     };
 }
 
-// Simulated backend request – replace with your real backend logic.
-async function handleBackendRequest(code: string): Promise<string> {
-    const mockResponses = new Map<string, string>([
-        ['for(', 'Consider using .map() or .filter() for array transformations'],
-        ['var ', 'Use const/let instead of var for better scoping'],
-        ['function(', 'Arrow functions might be more concise here'],
-        ['console.log', 'Remember to remove debug statements before committing']
-    ]);
+async function fetchSuggestionFromBackend(code: string, proficiency: string): Promise<string> {
+    const backendUrl = `${getBackendUrl()}/query`;
+    const response = await fetch(backendUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, proficiency })
+    });
+    if (!response.ok) throw new Error(`Backend error: ${response.statusText}`);
+    const data = await response.json();
+    return data.suggestion;
+}
 
-    // Simulate network delay.
-    await new Promise(resolve => setTimeout(resolve, 500));
+async function fetchFullCodeSuggestions(code: string, proficiency: string): Promise<{ line: number; message: string }[]> {
+    const backendUrl = `${getBackendUrl()}/analyze`;
+    const response = await fetch(backendUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, proficiency })
+    });
+    if (!response.ok) throw new Error(`Backend error: ${response.statusText}`);
+    const data = await response.json();
+    return data.suggestions;
+}
 
-    for (const [pattern, response] of mockResponses) {
-        if (code.includes(pattern)) {
-            return response;
-        }
-    }
-    return 'This code looks good! Consider adding comments for clarity.';
+async function sendFeedbackToBackend(response: string, helpful: boolean): Promise<void> {
+    const backendUrl = `${getBackendUrl()}/feedback`;
+    await fetch(backendUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ response, helpful, timestamp: new Date().toISOString() })
+    });
 }
 
 export function deactivate() {}
