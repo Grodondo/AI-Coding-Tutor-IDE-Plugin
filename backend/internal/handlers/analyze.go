@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -16,7 +15,7 @@ type AnalyzeRequest struct {
 }
 
 // AnalyzeHandler returns a Gin handler for analyzing full code
-func AnalyzeHandler(aiService *services.AIService, dbService *services.DBService) gin.HandlerFunc {
+func AnalyzeHandler(aiService *services.AIService, dbService *services.DBService, settingsService *services.SettingsService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req AnalyzeRequest
 		if err := c.BindJSON(&req); err != nil {
@@ -25,14 +24,16 @@ func AnalyzeHandler(aiService *services.AIService, dbService *services.DBService
 		}
 
 		// Construct prompt for full code analysis
-		prompt := fmt.Sprintf(
-			"Analyze the following code for a %s level programmer and provide suggestions for improvement. "+
-				"Format each suggestion as 'Line X: suggestion text', where X is the line number.\n\n%s",
-			req.Level, req.Code,
-		)
+		ai_settings, _ := settingsService.GetAiSettings()
+		promptTemplate, ok := ai_settings.Prompts[req.Level]
+		if !ok {
+			c.JSON(400, gin.H{"error": "Invalid level"})
+			return
+		}
+		prompt := promptTemplate + req.Code
 
-		// TODO Get AI response - get a lower quiality ai version later on
-		response, err := aiService.GetResponseGroq(prompt)
+		// Get AI response
+		response, err := aiService.GetResponse(ai_settings.AIProvider, ai_settings.AIModel, prompt)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to get AI response"})
 			return

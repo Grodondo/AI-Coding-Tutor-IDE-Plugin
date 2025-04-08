@@ -18,8 +18,8 @@ func main() {
 	dbUser := os.Getenv("DB_USER")
 	dbPassword := os.Getenv("DB_PASSWORD")
 	dbName := os.Getenv("DB_NAME")
-	aiAPIKey := os.Getenv("AI_API_KEY")
-	fmt.Printf("AI_API_KEY: %s\n", os.Getenv("AI_API_KEY"))
+	// aiAPIKey := os.Getenv("AI_API_KEY")
+	// fmt.Printf("AI_API_KEY: %s\n", os.Getenv("AI_API_KEY"))
 
 	// Construct DSN
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
@@ -30,15 +30,22 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	aiService := services.NewAIService(aiAPIKey)
+	aiService := services.NewAIService()
+	//TODO: Add settingsService initialization
+	settingsService, err := services.NewSettingsService(dbService)
+	if err != nil {
+		panic(err)
+	}
 
 	// Set up Gin router
 	router := gin.Default()
 
 	// Define routes
-	router.POST("/query", handlers.QueryHandler(aiService, dbService))
-	router.POST("/analyze", handlers.AnalyzeHandler(aiService, dbService))
-	router.POST("/feedback", handlers.FeedbackHandler(dbService))
+	router.POST("api/v1/query", handlers.QueryHandler(aiService, dbService, settingsService))
+	router.POST("api/v1/analyze", handlers.AnalyzeHandler(aiService, dbService, settingsService))
+	router.POST("api/v1/feedback", handlers.FeedbackHandler(dbService))
+	router.POST("api/v1/login", handlers.LoginHandler(dbService))
+	router.GET("api/v1/settings", handlers.UpdateSettingsHandler(dbService, settingsService))
 
 	// Run server
 	router.Run(":8080")

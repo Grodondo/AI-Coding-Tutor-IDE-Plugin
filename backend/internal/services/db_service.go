@@ -25,6 +25,34 @@ func NewDBService(dsn string) (*DBService, error) {
 	return &DBService{db: db}, nil
 }
 
+// UpdateSettings inserts or updates settings for a specific service
+func (s *DBService) UpdateSettings(service, configJSON string) error {
+	// Use UPSERT to update if exists, insert if not
+	_, err := s.db.Exec(`
+        INSERT INTO settings (service, config) 
+        VALUES ($1, $2) 
+        ON CONFLICT (service) 
+        DO UPDATE SET config = $2, updated_at = CURRENT_TIMESTAMP
+    `, service, configJSON)
+	if err != nil {
+		return fmt.Errorf("failed to update settings: %v", err)
+	}
+	return nil
+}
+
+// GetUserCredentials retrieves the password hash and role for a given username
+func (s *DBService) GetUserCredentials(username string) (passwordHash, role string, err error) {
+	err = s.db.QueryRow("SELECT password_hash, role FROM users WHERE username = $1", username).
+		Scan(&passwordHash, &role)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", "", fmt.Errorf("user not found")
+		}
+		return "", "", fmt.Errorf("database error: %v", err)
+	}
+	return passwordHash, role, nil
+}
+
 // CreateQuery inserts a new query into the database
 func (s *DBService) CreateQuery(q *models.Query) error {
 	fmt.Printf("CreateQuery: q=%v\n", q)

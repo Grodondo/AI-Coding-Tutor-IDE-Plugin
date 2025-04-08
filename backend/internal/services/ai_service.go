@@ -21,11 +21,23 @@ func NewAIService(apiKey string) *AIService {
 	}
 }
 
+func (s *AIService) GetResponse(provider string, model string, prompt string) (string, error) {
+	switch provider {
+	case "groq":
+		return s.GetResponseGroq(model, prompt)
+	case "openai":
+		return s.GetResponseGPT(model, prompt)
+	default:
+		return "", fmt.Errorf("unknown provider: %s", provider)
+	}
+}
+
 // GetResponseGroq sends a prompt to Groq's API and returns the response
-func (s *AIService) GetResponseGroq(prompt string) (string, error) {
+func (s *AIService) GetResponseGroq(model string, prompt string) (string, error) {
 	fmt.Printf("GetResponseGroq: prompt=%s\n", prompt)
 	reqBody, err := json.Marshal(map[string]interface{}{
-		"model": "llama-3.3-70b-versatile",
+		"model":       model,
+		"temperature": 0.7,
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},
 		},
@@ -74,9 +86,10 @@ func (s *AIService) GetResponseGroq(prompt string) (string, error) {
 }
 
 // GetResponseGPT sends a prompt to the AI API and returns the response
-func (s *AIService) GetResponseGPT(prompt string) (string, error) {
+func (s *AIService) GetResponseGPT(model string, prompt string) (string, error) {
 	reqBody, err := json.Marshal(map[string]interface{}{
-		"model": "gpt-3.5-turbo",
+		"model":       model,
+		"temperature": 0.7,
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},
 		},

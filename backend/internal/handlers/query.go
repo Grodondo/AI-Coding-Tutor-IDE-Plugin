@@ -16,7 +16,7 @@ type QueryRequest struct {
 }
 
 // QueryHandler returns a Gin handler for processing queries
-func QueryHandler(aiService *services.AIService, dbService *services.DBService) gin.HandlerFunc {
+func QueryHandler(aiService *services.AIService, dbService *services.DBService, settingsService *services.SettingsService) gin.HandlerFunc {
 	fmt.Printf("QueryHandler: aiService=%v, dbService=%v\n", aiService, dbService)
 	return func(c *gin.Context) {
 		var req QueryRequest
@@ -28,22 +28,17 @@ func QueryHandler(aiService *services.AIService, dbService *services.DBService) 
 		// Generate unique ID
 		id := uuid.New().String()
 
-		// TODO Construct prompt based on proficiency level
-		var prompt string
-		switch req.Level {
-		case "novice":
-			prompt = "You are teaching a novice programmer who is just starting to learn coding. Provide very detailed explanations, breaking down complex concepts into simple, easy-to-understand steps. Use plenty of examples, analogies, and multiple code snippets to illustrate your points. Be encouraging and patient in your tone. Answer the following query: " + req.Query
-		case "medium":
-			prompt = "You are assisting a programmer with medium experience. They have a basic understanding of programming concepts but may need reminders or clarifications on intermediate topics. Provide clear answers with explanations where necessary, and include code snippets if they help clarify the explanation. Avoid over-explaining basic concepts. Answer the following query: " + req.Query
-		case "expert":
-			prompt = "You are helping an expert programmer who is highly skilled and experienced. Provide concise and advanced insights, assuming a deep understanding of programming concepts. Focus on efficient solutions, optimizations, and best practices. Include code snippets only if they provide unique insights or optimizations. Answer the following query: " + req.Query
-		default:
+		// Settings service to get the prompt template
+		ai_settings := settingsService.GetAiSettings()
+		promptTemplate, ok := ai_settings.Prompts[req.Level]
+		if !ok {
 			c.JSON(400, gin.H{"error": "Invalid level"})
 			return
 		}
+		prompt := promptTemplate + req.Query
 
 		// Get AI response
-		response, err := aiService.GetResponseGroq(prompt)
+		response, err := aiService.GetResponse(ai_settings.AIProvider, ai_settings.AIModel, prompt)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to get AI response"})
 			return
