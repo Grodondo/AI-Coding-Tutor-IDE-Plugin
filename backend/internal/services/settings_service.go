@@ -3,6 +3,8 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/models"
 )
 
 // Settings holds the AI configuration
@@ -67,8 +69,12 @@ func (ss *SettingsService) LoadAiSettings() error {
 }
 
 // GetSettings retrieves settings for a specific service
-func (ss *SettingsService) GetAiSettings(service string) (*AiSettings, error) {
-	settings, exists := ss.settings[service]
+func (ss *SettingsService) GetAiSettings(service models.ServiceType) (*AiSettings, error) {
+	if !service.IsValid() {
+		return nil, fmt.Errorf("invalid service type: %s", service)
+	}
+
+	settings, exists := ss.settings[service.String()]
 	if !exists {
 		return nil, fmt.Errorf("no settings for service: %s", service)
 	}

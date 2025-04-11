@@ -5,35 +5,42 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/models"
 )
 
 // AIService manages interactions with the AI API
 type AIService struct {
-	apiKey string
-	client *http.Client
+	settingsService *SettingsService
+	client          *http.Client
 }
 
 // NewAIService creates a new AI service instance
-func NewAIService(apiKey string) *AIService {
+func NewAIService(settingsService *SettingsService) *AIService {
 	return &AIService{
-		apiKey: apiKey,
-		client: &http.Client{},
+		settingsService: settingsService,
+		client:          &http.Client{},
 	}
 }
 
-func (s *AIService) GetResponse(provider string, model string, prompt string) (string, error) {
+func (s *AIService) GetResponse(service models.ServiceType, provider string, model string, prompt string) (string, error) {
+	settings, err := s.settingsService.GetAiSettings(service) // or "analyze" depending on context
+	if err != nil {
+		return "", fmt.Errorf("failed to get AI settings: %w", err)
+	}
+
 	switch provider {
 	case "groq":
-		return s.GetResponseGroq(model, prompt)
+		return s.GetResponseGroq(settings.APIKey, model, prompt)
 	case "openai":
-		return s.GetResponseGPT(model, prompt)
+		return s.GetResponseGPT(settings.APIKey, model, prompt)
 	default:
 		return "", fmt.Errorf("unknown provider: %s", provider)
 	}
 }
 
 // GetResponseGroq sends a prompt to Groq's API and returns the response
-func (s *AIService) GetResponseGroq(model string, prompt string) (string, error) {
+func (s *AIService) GetResponseGroq(apiKey string, model string, prompt string) (string, error) {
 	fmt.Printf("GetResponseGroq: prompt=%s\n", prompt)
 	reqBody, err := json.Marshal(map[string]interface{}{
 		"model":       model,
@@ -50,7 +57,7 @@ func (s *AIService) GetResponseGroq(model string, prompt string) (string, error)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+s.apiKey)
+	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := s.client.Do(req)
@@ -86,7 +93,7 @@ func (s *AIService) GetResponseGroq(model string, prompt string) (string, error)
 }
 
 // GetResponseGPT sends a prompt to the AI API and returns the response
-func (s *AIService) GetResponseGPT(model string, prompt string) (string, error) {
+func (s *AIService) GetResponseGPT(apiKey string, model string, prompt string) (string, error) {
 	reqBody, err := json.Marshal(map[string]interface{}{
 		"model":       model,
 		"temperature": 0.7,
@@ -102,7 +109,7 @@ func (s *AIService) GetResponseGPT(model string, prompt string) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+s.apiKey)
+	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := s.client.Do(req)

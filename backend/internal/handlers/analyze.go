@@ -33,7 +33,7 @@ func AnalyzeHandler(aiService *services.AIService, dbService *services.DBService
 		prompt := promptTemplate + req.Code
 
 		// Get AI response
-		response, err := aiService.GetResponse(ai_settings.AIProvider, ai_settings.AIModel, prompt)
+		response, err := aiService.GetResponse("analyze", ai_settings.AIProvider, ai_settings.AIModel, prompt)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to get AI response"})
 			return

@@ -32,11 +32,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	aiService := services.NewAIService()
 	settingsService, err := services.NewSettingsService(dbService)
 	if err != nil {
 		panic(err)
 	}
+	aiService := services.NewAIService(settingsService)
 
 	// Set up Gin router
 	router := gin.Default()
