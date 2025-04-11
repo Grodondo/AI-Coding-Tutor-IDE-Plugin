@@ -55,6 +55,7 @@ func (ss *SettingsService) LoadAiSettings() error {
 		if err := json.Unmarshal([]byte(configJSON), &settings); err != nil {
 			return err
 		}
+		//TODO add encryption later
 		apiKey, err := utils.Decrypt(settings.EncryptedAPIKey, encryptionKey)
 		if err != nil {
 			return err

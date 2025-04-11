@@ -24,7 +24,7 @@ func AnalyzeHandler(aiService *services.AIService, dbService *services.DBService
 		}
 
 		// Construct prompt for full code analysis
-		ai_settings, _ := settingsService.GetAiSettings()
+		ai_settings, _ := settingsService.GetAiSettings("analyze")
 		promptTemplate, ok := ai_settings.Prompts[req.Level]
 		if !ok {
 			c.JSON(400, gin.H{"error": "Invalid level"})

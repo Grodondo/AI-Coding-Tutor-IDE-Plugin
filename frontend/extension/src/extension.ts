@@ -199,7 +199,7 @@ function createResponseDecoration(lineNumber: number, response: string): vscode.
 }
 
 async function fetchSuggestionFromBackend(code: string, proficiency: string): Promise<string> {
-    const backendUrl = `${getBackendUrl()}/query`;
+    const backendUrl = `${getBackendUrl()}/api/v1/query`;
     const response = await fetch(backendUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -211,7 +211,7 @@ async function fetchSuggestionFromBackend(code: string, proficiency: string): Pr
 }
 
 async function fetchFullCodeSuggestions(code: string, proficiency: string): Promise<{ line: number; message: string }[]> {
-    const backendUrl = `${getBackendUrl()}/analyze`;
+    const backendUrl = `${getBackendUrl()}/api/v1/analyze`;
     const response = await fetch(backendUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -223,7 +223,7 @@ async function fetchFullCodeSuggestions(code: string, proficiency: string): Prom
 }
 
 async function sendFeedbackToBackend(response: string, helpful: boolean): Promise<void> {
-    const backendUrl = `${getBackendUrl()}/feedback`;
+    const backendUrl = `${getBackendUrl()}api/v1/feedback`;
     await fetch(backendUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

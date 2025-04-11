@@ -15,7 +15,14 @@ type QueryRequest struct {
 	Level string `json:"level"`
 }
 
-// QueryHandler returns a Gin handler for processing queries
+// @Summary Query the AI
+// @Description Send a query to the AI and get a response
+// @Accept json
+// @Produce json
+// @Param query body QueryRequest true "Query Request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} ErrorResponse
+// @Router /query [post]
 func QueryHandler(aiService *services.AIService, dbService *services.DBService, settingsService *services.SettingsService) gin.HandlerFunc {
 	fmt.Printf("QueryHandler: aiService=%v, dbService=%v\n", aiService, dbService)
 	return func(c *gin.Context) {
@@ -29,7 +36,7 @@ func QueryHandler(aiService *services.AIService, dbService *services.DBService, 
 		id := uuid.New().String()
 
 		// Settings service to get the prompt template
-		ai_settings := settingsService.GetAiSettings()
+		ai_settings, _ := settingsService.GetAiSettings("query")
 		promptTemplate, ok := ai_settings.Prompts[req.Level]
 		if !ok {
 			c.JSON(400, gin.H{"error": "Invalid level"})

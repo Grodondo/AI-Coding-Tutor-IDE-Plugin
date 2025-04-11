@@ -7,6 +7,8 @@ import (
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/handlers"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func main() {
@@ -31,7 +33,6 @@ func main() {
 		panic(err)
 	}
 	aiService := services.NewAIService()
-	//TODO: Add settingsService initialization
 	settingsService, err := services.NewSettingsService(dbService)
 	if err != nil {
 		panic(err)
@@ -46,6 +47,7 @@ func main() {
 	router.POST("api/v1/feedback", handlers.FeedbackHandler(dbService))
 	router.POST("api/v1/login", handlers.LoginHandler(dbService))
 	router.GET("api/v1/settings", handlers.UpdateSettingsHandler(dbService, settingsService))
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Run server
 	router.Run(":8080")
