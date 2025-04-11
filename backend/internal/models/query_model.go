@@ -2,6 +2,7 @@ package models
 
 type Query struct {
 	ID       string
+	Provider string
 	Query    string
 	Level    string
 	Response string

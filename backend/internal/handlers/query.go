@@ -21,7 +21,7 @@ type QueryRequest struct {
 // @Produce json
 // @Param query body QueryRequest true "Query Request"
 // @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} ErrorResponse
+// @Failure 400 {object} map[string]string
 // @Router /query [post]
 func QueryHandler(aiService *services.AIService, dbService *services.DBService, settingsService *services.SettingsService) gin.HandlerFunc {
 	fmt.Printf("QueryHandler: aiService=%v, dbService=%v\n", aiService, dbService)
@@ -56,6 +56,7 @@ func QueryHandler(aiService *services.AIService, dbService *services.DBService, 
 		// Store in database
 		query := &models.Query{
 			ID:       id,
+			Provider: ai_settings.AIProvider,
 			Query:    req.Query,
 			Level:    req.Level,
 			Response: response,

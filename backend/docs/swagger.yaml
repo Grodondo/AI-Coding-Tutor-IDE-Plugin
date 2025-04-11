@@ -1,0 +1,39 @@
+definitions:
+  handlers.QueryRequest:
+    properties:
+      level:
+        type: string
+      query:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /query:
+    post:
+      consumes:
+      - application/json
+      description: Send a query to the AI and get a response
+      parameters:
+      - description: Query Request
+        in: body
+        name: query
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.QueryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Query the AI
+swagger: "2.0"

@@ -3,7 +3,6 @@ package services
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 )
 
 // Settings holds the AI configuration
@@ -41,10 +40,10 @@ func (ss *SettingsService) LoadAiSettings() error {
 	}
 	defer rows.Close()
 
-	encryptionKey := os.Getenv("ENCRYPTION_KEY")
-	if encryptionKey == "" {
-		return fmt.Errorf("ENCRYPTION_KEY not set")
-	}
+	// encryptionKey := os.Getenv("ENCRYPTION_KEY")
+	// if encryptionKey == "" {
+	// 	return fmt.Errorf("ENCRYPTION_KEY not set")
+	// }
 
 	for rows.Next() {
 		var service, configJSON string
@@ -56,11 +55,12 @@ func (ss *SettingsService) LoadAiSettings() error {
 			return err
 		}
 		//TODO add encryption later
-		apiKey, err := utils.Decrypt(settings.EncryptedAPIKey, encryptionKey)
-		if err != nil {
-			return err
-		}
-		settings.APIKey = apiKey
+		// apiKey, err := utils.Decrypt(settings.EncryptedAPIKey, encryptionKey)
+		// if err != nil {
+		// 	return err
+		// }
+		// settings.APIKey = apiKey
+		settings.APIKey = settings.EncryptedAPIKey
 		ss.settings[service] = &settings
 	}
 	return nil

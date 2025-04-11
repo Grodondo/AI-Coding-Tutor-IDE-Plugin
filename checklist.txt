@@ -17,6 +17,13 @@ SELECT COUNT(*) FROM queries;
 #feedback
 curl -X POST -H "Content-Type: application/json" -d '{"id":"returned-id","feedback":"positive"}' http://localhost:8080/feedback
 
+#SWAGGER
+Ejecutar desde el ./backend
+swag init -g cmd/server/main.go
+Once the server is running:
+http://localhost:8080/swagger/index.html
+
+
 
 
 TODO LIST
