@@ -11,18 +11,20 @@ import (
 
 // QueryRequest defines the expected JSON body for /query
 type QueryRequest struct {
-	Query string `json:"query"`
-	Level string `json:"level"`
+	Query string `json:"query" binding:"required" example:"How do I create a new file in Python?"`
+	Level string `json:"level" binding:"required" example:"beginner"`
 }
 
 // @Summary Query the AI
 // @Description Send a query to the AI and get a response
+// @Tags query
 // @Accept json
 // @Produce json
 // @Param query body QueryRequest true "Query Request"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]string
-// @Router /query [post]
+// @Success 200 {object} map[string]interface{} "Returns query ID and response"
+// @Failure 400 {object} map[string]string "Invalid request format"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /api/v1/query [post]
 func QueryHandler(aiService *services.AIService, dbService *services.DBService, settingsService *services.SettingsService) gin.HandlerFunc {
 	fmt.Printf("QueryHandler: aiService=%v, dbService=%v\n", aiService, dbService)
 	return func(c *gin.Context) {
@@ -36,7 +38,11 @@ func QueryHandler(aiService *services.AIService, dbService *services.DBService, 
 		id := uuid.New().String()
 
 		// Settings service to get the prompt template
-		ai_settings, _ := settingsService.GetAiSettings("query")
+		ai_settings, err := settingsService.GetAiSettings(models.QueryService)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to get settings"})
+			return
+		}
 		promptTemplate, ok := ai_settings.Prompts[req.Level]
 		if !ok {
 			c.JSON(400, gin.H{"error": "Invalid level"})

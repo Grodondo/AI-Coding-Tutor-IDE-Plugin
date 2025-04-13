@@ -1,15 +1,68 @@
 definitions:
+  handlers.LoginRequest:
+    properties:
+      password:
+        example: secretpass123
+        type: string
+      username:
+        example: johndoe
+        type: string
+    required:
+    - password
+    - username
+    type: object
   handlers.QueryRequest:
     properties:
       level:
+        example: beginner
         type: string
       query:
+        example: How do I create a new file in Python?
         type: string
+    required:
+    - level
+    - query
     type: object
 info:
   contact: {}
 paths:
-  /query:
+  /api/v1/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate a user and return a JWT token
+      parameters:
+      - description: Login Credentials
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Returns JWT token
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Invalid credentials
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: User login
+      tags:
+      - authentication
+  /api/v1/query:
     post:
       consumes:
       - application/json
@@ -25,15 +78,23 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Returns query ID and response
           schema:
             additionalProperties: true
             type: object
         "400":
-          description: Bad Request
+          description: Invalid request format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
           schema:
             additionalProperties:
               type: string
             type: object
       summary: Query the AI
+      tags:
+      - query
 swagger: "2.0"

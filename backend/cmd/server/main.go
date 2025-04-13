@@ -27,6 +27,8 @@ func main() {
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPassword, dbName)
 
+	fmt.Printf("DSN: %s\n", dsn)
+
 	// Initialize services
 	dbService, err := services.NewDBService(dsn)
 	if err != nil {
