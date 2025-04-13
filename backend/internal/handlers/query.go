@@ -9,19 +9,27 @@ import (
 	"github.com/google/uuid"
 )
 
-// QueryRequest defines the expected JSON body for /query
+// QueryRequest defines the structure for AI query requests
+// @Description Query request structure for AI interactions
 type QueryRequest struct {
 	Query string `json:"query" binding:"required" example:"How do I create a new file in Python?"`
-	Level string `json:"level" binding:"required" example:"beginner"`
+	Level string `json:"level" binding:"required" example:"beginner" enums:"beginner,intermediate,advanced"`
+}
+
+// QueryResponse defines the structure for AI query responses
+// @Description Response structure for AI query results
+type QueryResponse struct {
+	ID       string `json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Response string `json:"response" example:"To create a new file in Python, you can use the open() function with 'w' mode..."`
 }
 
 // @Summary Query the AI
 // @Description Send a query to the AI and get a response
-// @Tags query
+// @Tags AI Interaction
 // @Accept json
 // @Produce json
-// @Param query body QueryRequest true "Query Request"
-// @Success 200 {object} map[string]interface{} "Returns query ID and response"
+// @Param query body QueryRequest true "Query parameters"
+// @Success 200 {object} QueryResponse
 // @Failure 400 {object} map[string]string "Invalid request format"
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Router /api/v1/query [post]
@@ -62,8 +70,8 @@ func QueryHandler(aiService *services.AIService, dbService *services.DBService, 
 		// Store in database
 		query := &models.Query{
 			ID:       id,
-			Provider: ai_settings.AIProvider,
 			Query:    req.Query,
+			Provider: ai_settings.AIProvider,
 			Level:    req.Level,
 			Response: response,
 			Feedback: nil,

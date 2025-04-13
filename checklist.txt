@@ -6,8 +6,8 @@ docker-compose up (-d --build)
 docker exec -it ai-coding-tutor-ide-plugin-backend-1 /bin/bash    (or bin/sh)
 docker exec -it ai-coding-tutor-ide-plugin-backend-1 env  (to see env variables, "env" inside the container also works)
 docker logs container_name  (to check docker logs and ensure api key is setup)
-curl -X POST -H "Content-Type: application/json" -d '{"query":"How to write a loop? Keep the answer short","level":"novice"}' http://localhost:8080/query  (to test the backend)
-
+curl -X POST -H "Content-Type: application/json" -d '{"query":"How to write a loop? Keep the answer short","level":"novice"}' http://localhost:8080/api/v1/query (to test the backend)
+curl -X POST -H "Content-Type: application/json" -d '{"code":"def hello_world():\n    print(\"Line 1: Hello World! Line2: as, line el\")","level":"novice"}' http://localhost:8080/api/v1/analyze
 
 #Checking database
 docker exec -it ai-coding-tutor-ide-plugin-db-1 psql -U user -d mydb

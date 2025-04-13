@@ -9,12 +9,128 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "contact": {},
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "API Support",
+            "url": "http://www.swagger.io/support",
+            "email": "support@swagger.io"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/analyze": {
+            "post": {
+                "description": "Analyze code for best practices, improvements, and potential issues",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Code Analysis"
+                ],
+                "summary": "Analyze code",
+                "parameters": [
+                    {
+                        "description": "Code to analyze",
+                        "name": "code",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AnalyzeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AnalyzeResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/feedback": {
+            "post": {
+                "description": "Submit feedback for an AI interaction",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Feedback"
+                ],
+                "summary": "Submit feedback",
+                "parameters": [
+                    {
+                        "description": "Feedback details",
+                        "name": "feedback",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.FeedbackRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Feedback submitted successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request format",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Query ID not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/login": {
             "post": {
                 "description": "Authenticate a user and return a JWT token",
@@ -80,12 +196,12 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "query"
+                    "AI Interaction"
                 ],
                 "summary": "Query the AI",
                 "parameters": [
                     {
-                        "description": "Query Request",
+                        "description": "Query parameters",
                         "name": "query",
                         "in": "body",
                         "required": true,
@@ -96,10 +212,9 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Returns query ID and response",
+                        "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/handlers.QueryResponse"
                         }
                     },
                     "400": {
@@ -125,6 +240,68 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "handlers.AnalyzeRequest": {
+            "description": "Request structure for code analysis",
+            "type": "object",
+            "required": [
+                "code",
+                "level"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "example": "def hello_world():\n    print('Hello, World!')"
+                },
+                "level": {
+                    "type": "string",
+                    "enum": [
+                        "beginner",
+                        "intermediate",
+                        "advanced"
+                    ],
+                    "example": "beginner"
+                }
+            }
+        },
+        "handlers.AnalyzeResponse": {
+            "description": "Response structure for code analysis results",
+            "type": "object",
+            "properties": {
+                "suggestions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "['Consider adding docstring to the function'",
+                        " 'Follow PEP 8 naming conventions']"
+                    ]
+                }
+            }
+        },
+        "handlers.FeedbackRequest": {
+            "description": "Feedback request structure",
+            "type": "object",
+            "required": [
+                "feedback",
+                "id"
+            ],
+            "properties": {
+                "feedback": {
+                    "type": "string",
+                    "enum": [
+                        "positive",
+                        "negative",
+                        "neutral"
+                    ],
+                    "example": "positive"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                }
+            }
+        },
         "handlers.LoginRequest": {
             "type": "object",
             "required": [
@@ -143,6 +320,7 @@ const docTemplate = `{
             }
         },
         "handlers.QueryRequest": {
+            "description": "Query request structure for AI interactions",
             "type": "object",
             "required": [
                 "level",
@@ -151,6 +329,11 @@ const docTemplate = `{
             "properties": {
                 "level": {
                     "type": "string",
+                    "enum": [
+                        "beginner",
+                        "intermediate",
+                        "advanced"
+                    ],
                     "example": "beginner"
                 },
                 "query": {
@@ -158,18 +341,45 @@ const docTemplate = `{
                     "example": "How do I create a new file in Python?"
                 }
             }
+        },
+        "handlers.QueryResponse": {
+            "description": "Response structure for AI query results",
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "response": {
+                    "type": "string",
+                    "example": "To create a new file in Python, you can use the open() function with 'w' mode..."
+                }
+            }
         }
+    },
+    "securityDefinitions": {
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        },
+        "BasicAuth": {
+            "type": "basic"
+        }
+    },
+    "x-extension-openapi": {
+        "example": "value on a json format"
     }
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "",
-	Host:             "",
-	BasePath:         "",
+	Version:          "1.0",
+	Host:             "localhost:8080",
+	BasePath:         "/api/v1",
 	Schemes:          []string{},
-	Title:            "",
-	Description:      "",
+	Title:            "AI Coding Tutor API",
+	Description:      "API for the AI Coding Tutor IDE Plugin - A smart programming assistant",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

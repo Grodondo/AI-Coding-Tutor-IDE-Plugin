@@ -7,13 +7,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// FeedbackRequest defines the expected JSON body for /feedback
+// FeedbackRequest defines the structure for user feedback
+// @Description Feedback request structure
 type FeedbackRequest struct {
-	ID       string `json:"id"`
-	Feedback string `json:"feedback"`
+	QueryID  string `json:"id" binding:"required" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Feedback string `json:"feedback" binding:"required" example:"positive" enums:"positive,negative,neutral"`
 }
 
-// FeedbackHandler returns a Gin handler for processing feedback
+// @Summary Submit feedback
+// @Description Submit feedback for an AI interaction
+// @Tags Feedback
+// @Accept json
+// @Produce json
+// @Param feedback body FeedbackRequest true "Feedback details"
+// @Success 200 {object} map[string]string "Feedback submitted successfully"
+// @Failure 400 {object} map[string]string "Invalid request format"
+// @Failure 404 {object} map[string]string "Query ID not found"
+// @Router /api/v1/feedback [post]
 func FeedbackHandler(dbService *services.DBService) gin.HandlerFunc {
 	fmt.Printf("FeedbackHandler: dbService=%v\n", dbService)
 	return func(c *gin.Context) {
@@ -24,7 +34,7 @@ func FeedbackHandler(dbService *services.DBService) gin.HandlerFunc {
 		}
 
 		// Update feedback in database
-		if err := dbService.UpdateFeedback(req.ID, req.Feedback); err != nil {
+		if err := dbService.UpdateFeedback(req.QueryID, req.Feedback); err != nil {
 			c.JSON(500, gin.H{"error": "Failed to update feedback"})
 			return
 		}

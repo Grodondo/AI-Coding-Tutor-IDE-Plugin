@@ -1,4 +1,52 @@
+basePath: /api/v1
 definitions:
+  handlers.AnalyzeRequest:
+    description: Request structure for code analysis
+    properties:
+      code:
+        example: |-
+          def hello_world():
+              print('Hello, World!')
+        type: string
+      level:
+        enum:
+        - beginner
+        - intermediate
+        - advanced
+        example: beginner
+        type: string
+    required:
+    - code
+    - level
+    type: object
+  handlers.AnalyzeResponse:
+    description: Response structure for code analysis results
+    properties:
+      suggestions:
+        example:
+        - '[''Consider adding docstring to the function'''
+        - ' ''Follow PEP 8 naming conventions'']'
+        items:
+          type: string
+        type: array
+    type: object
+  handlers.FeedbackRequest:
+    description: Feedback request structure
+    properties:
+      feedback:
+        enum:
+        - positive
+        - negative
+        - neutral
+        example: positive
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    required:
+    - feedback
+    - id
+    type: object
   handlers.LoginRequest:
     properties:
       password:
@@ -12,8 +60,13 @@ definitions:
     - username
     type: object
   handlers.QueryRequest:
+    description: Query request structure for AI interactions
     properties:
       level:
+        enum:
+        - beginner
+        - intermediate
+        - advanced
         example: beginner
         type: string
       query:
@@ -23,9 +76,101 @@ definitions:
     - level
     - query
     type: object
+  handlers.QueryResponse:
+    description: Response structure for AI query results
+    properties:
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      response:
+        example: To create a new file in Python, you can use the open() function with
+          'w' mode...
+        type: string
+    type: object
+host: localhost:8080
 info:
-  contact: {}
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: API for the AI Coding Tutor IDE Plugin - A smart programming assistant
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: AI Coding Tutor API
+  version: "1.0"
 paths:
+  /api/v1/analyze:
+    post:
+      consumes:
+      - application/json
+      description: Analyze code for best practices, improvements, and potential issues
+      parameters:
+      - description: Code to analyze
+        in: body
+        name: code
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.AnalyzeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AnalyzeResponse'
+        "400":
+          description: Invalid request format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Analyze code
+      tags:
+      - Code Analysis
+  /api/v1/feedback:
+    post:
+      consumes:
+      - application/json
+      description: Submit feedback for an AI interaction
+      parameters:
+      - description: Feedback details
+        in: body
+        name: feedback
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.FeedbackRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Feedback submitted successfully
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Query ID not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Submit feedback
+      tags:
+      - Feedback
   /api/v1/login:
     post:
       consumes:
@@ -68,7 +213,7 @@ paths:
       - application/json
       description: Send a query to the AI and get a response
       parameters:
-      - description: Query Request
+      - description: Query parameters
         in: body
         name: query
         required: true
@@ -78,10 +223,9 @@ paths:
       - application/json
       responses:
         "200":
-          description: Returns query ID and response
+          description: OK
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/handlers.QueryResponse'
         "400":
           description: Invalid request format
           schema:
@@ -96,5 +240,14 @@ paths:
             type: object
       summary: Query the AI
       tags:
-      - query
+      - AI Interaction
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+  BasicAuth:
+    type: basic
 swagger: "2.0"
+x-extension-openapi:
+  example: value on a json format

@@ -4,17 +4,34 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/models"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
 	"github.com/gin-gonic/gin"
 )
 
-// AnalyzeRequest defines the expected JSON body for /analyze
+// AnalyzeRequest defines the structure for code analysis requests
+// @Description Request structure for code analysis
 type AnalyzeRequest struct {
-	Code  string `json:"code"`
-	Level string `json:"level"`
+	Code  string `json:"code" binding:"required" example:"def hello_world():\n    print('Hello, World!')"`
+	Level string `json:"level" binding:"required" example:"beginner" enums:"beginner,intermediate,advanced"`
 }
 
-// AnalyzeHandler returns a Gin handler for analyzing full code
+// AnalyzeResponse defines the structure for code analysis responses
+// @Description Response structure for code analysis results
+type AnalyzeResponse struct {
+	Suggestions []string `json:"suggestions" example:"['Consider adding docstring to the function', 'Follow PEP 8 naming conventions']"`
+}
+
+// @Summary Analyze code
+// @Description Analyze code for best practices, improvements, and potential issues
+// @Tags Code Analysis
+// @Accept json
+// @Produce json
+// @Param code body AnalyzeRequest true "Code to analyze"
+// @Success 200 {object} AnalyzeResponse
+// @Failure 400 {object} map[string]string "Invalid request format"
+// @Failure 500 {object} map[string]string "Internal server error"
+// @Router /api/v1/analyze [post]
 func AnalyzeHandler(aiService *services.AIService, dbService *services.DBService, settingsService *services.SettingsService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req AnalyzeRequest
@@ -24,7 +41,11 @@ func AnalyzeHandler(aiService *services.AIService, dbService *services.DBService
 		}
 
 		// Construct prompt for full code analysis
-		ai_settings, _ := settingsService.GetAiSettings("analyze")
+		ai_settings, err := settingsService.GetAiSettings(models.AnalyzeService)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to get settings"})
+			return
+		}
 		promptTemplate, ok := ai_settings.Prompts[req.Level]
 		if !ok {
 			c.JSON(400, gin.H{"error": "Invalid level"})
