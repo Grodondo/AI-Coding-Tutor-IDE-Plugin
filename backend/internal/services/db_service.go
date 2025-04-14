@@ -57,8 +57,8 @@ func (s *DBService) GetUserCredentials(username string) (passwordHash, role stri
 func (s *DBService) CreateQuery(q *models.Query) error {
 	fmt.Printf("CreateQuery: q=%v\n", q)
 	_, err := s.db.Exec(
-		"INSERT INTO queries (id, query, level, response, feedback) VALUES ($1, $2, $3, $4, $5)",
-		q.ID, q.Query, q.Level, q.Response, q.Feedback,
+		"INSERT INTO queries (id, query, provider_name, level, response, feedback) VALUES ($1, $2, $3, $4, $5, $6)",
+		q.ID, q.Query, q.Provider, q.Level, q.Response, q.Feedback,
 	)
 	return err
 }
