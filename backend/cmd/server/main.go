@@ -7,6 +7,7 @@ import (
 	_ "github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/docs"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/handlers"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -64,6 +65,16 @@ func main() {
 
 	// Gin router
 	router := gin.Default()
+
+	// CORS middleware configuration
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * 60 * 60, // 12 hours
+	}))
 
 	// Api routes
 	router.POST("api/v1/query", handlers.QueryHandler(aiService, dbService, settingsService))

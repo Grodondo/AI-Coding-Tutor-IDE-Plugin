@@ -1,0 +1,94 @@
+@startuml
+namespace handlers {
+    class AnalyzeRequest << (S,Aquamarine) >> {
+        + Code string
+        + Level string
+
+    }
+    class AnalyzeResponse << (S,Aquamarine) >> {
+        + Suggestions []string
+
+    }
+    class FeedbackRequest << (S,Aquamarine) >> {
+        + QueryID string
+        + Feedback string
+
+    }
+    class LoginRequest << (S,Aquamarine) >> {
+        + Username string
+        + Password string
+
+    }
+    class QueryRequest << (S,Aquamarine) >> {
+        + Query string
+        + Level string
+
+    }
+    class QueryResponse << (S,Aquamarine) >> {
+        + ID string
+        + Response string
+
+    }
+}
+
+
+namespace models {
+    class Query << (S,Aquamarine) >> {
+        + ID string
+        + Query string
+        + Provider string
+        + Level string
+        + Response string
+        + Feedback *string
+
+    }
+    class ServiceType << (S,Aquamarine) >> {
+        + IsValid() bool
+        + String() string
+
+    }
+    class models.ServiceType << (T, #FF7700) >>  {
+    }
+}
+
+
+namespace services {
+    class AIService << (S,Aquamarine) >> {
+        - settingsService *SettingsService
+        - client *http.Client
+
+        + GetResponse(service models.ServiceType, provider string, model string, prompt string) (string, error)
+        + GetResponseGroq(apiKey string, model string, prompt string) (string, error)
+        + GetResponseGPT(apiKey string, model string, prompt string) (string, error)
+
+    }
+    class AiSettings << (S,Aquamarine) >> {
+        + AIProvider string
+        + AIModel string
+        + EncryptedAPIKey string
+        + APIKey string
+        + Prompts <font color=blue>map</font>[string]string
+
+    }
+    class DBService << (S,Aquamarine) >> {
+        - db *sql.DB
+
+        + UpdateSettings(service string, configJSON string) error
+        + GetUserCredentials(username string) (string, string, error)
+        + CreateQuery(q *models.Query) error
+        + UpdateFeedback(id string, feedback string) error
+
+    }
+    class SettingsService << (S,Aquamarine) >> {
+        - dbService *DBService
+        - settings <font color=blue>map</font>[string]*AiSettings
+
+        + LoadAiSettings() error
+        + GetAiSettings(service models.ServiceType) (*AiSettings, error)
+
+    }
+}
+
+
+"__builtin__.string" #.. "models.ServiceType"
+@enduml
