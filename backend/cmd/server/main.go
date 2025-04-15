@@ -77,11 +77,21 @@ func main() {
 	}))
 
 	// Api routes
+	router.GET("api/v1/verify-token", handlers.VerifyTokenHandler())
+	router.GET("api/v1/settings", handlers.UpdateSettingsHandler(dbService, settingsService))
 	router.POST("api/v1/query", handlers.QueryHandler(aiService, dbService, settingsService))
 	router.POST("api/v1/analyze", handlers.AnalyzeHandler(aiService, dbService, settingsService))
 	router.POST("api/v1/feedback", handlers.FeedbackHandler(dbService))
 	router.POST("api/v1/login", handlers.LoginHandler(dbService))
-	router.GET("api/v1/settings", handlers.UpdateSettingsHandler(dbService, settingsService))
+	router.POST("api/v1/register", handlers.RegisterHandler(dbService))
+
+	// Social auth routes
+	/*
+		router.GET("api/v1/auth/google", handlers.GoogleAuthHandler)
+		router.GET("api/v1/auth/github", handlers.GithubAuthHandler)
+		router.GET("api/v1/auth/google/callback", handlers.GoogleCallbackHandler)
+		router.GET("api/v1/auth/github/callback", handlers.GithubCallbackHandler)
+	*/
 
 	// Swagger documentation
 	url := ginSwagger.URL("/swagger/doc.json") // The url pointing to API definition

@@ -8,6 +8,16 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL driver
 )
 
+// User represents a user in the system
+type User struct {
+	FirstName    string
+	LastName     string
+	Email        string
+	Username     string
+	PasswordHash string
+	Role         string
+}
+
 // DBService holds the database connection
 type DBService struct {
 	db *sql.DB
@@ -23,6 +33,28 @@ func NewDBService(dsn string) (*DBService, error) {
 		return nil, err
 	}
 	return &DBService{db: db}, nil
+}
+
+// EmailExists checks if an email is already registered
+func (s *DBService) EmailExists(email string) (bool, error) {
+	var exists bool
+	err := s.db.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)", email).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check email existence: %v", err)
+	}
+	return exists, nil
+}
+
+// CreateUser creates a new user in the database
+func (s *DBService) CreateUser(user User) error {
+	_, err := s.db.Exec(`
+		INSERT INTO users (first_name, last_name, email, username, password_hash, role)
+		VALUES ($1, $2, $3, $4, $5, $6)`,
+		user.FirstName, user.LastName, user.Email, user.Username, user.PasswordHash, user.Role)
+	if err != nil {
+		return fmt.Errorf("failed to create user: %v", err)
+	}
+	return nil
 }
 
 // UpdateSettings inserts or updates settings for a specific service

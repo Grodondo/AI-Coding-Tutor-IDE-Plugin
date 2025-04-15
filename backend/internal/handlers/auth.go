@@ -5,21 +5,26 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/github"
+	"golang.org/x/oauth2/google"
 )
 
 type RegisterRequest struct {
-	FirstName    string `json:"firstName" binding:"required"`
-	LastName     string `json:"lastName" binding:"required"`
-	Email        string `json:"email" binding:"required,email"`
-	Password     string `json:"password" binding:"required"`
-	CaptchaToken string `json:"captchaToken" binding:"required"`
+	FirstName string `json:"firstName" binding:"required"`
+	LastName  string `json:"lastName" binding:"required"`
+	Email     string `json:"email" binding:"required,email"`
+	Username  string `json:"username" binding:"required"`
+	Password  string `json:"password" binding:"required"`
 }
 
 func validatePassword(password string) error {
@@ -158,12 +163,6 @@ func RegisterHandler(dbService *services.DBService) gin.HandlerFunc {
 			return
 		}
 
-		// Verify CAPTCHA
-		if err := verifyCaptcha(req.CaptchaToken); err != nil {
-			c.JSON(400, gin.H{"error": "Invalid CAPTCHA"})
-			return
-		}
-
 		// Check if email already exists
 		exists, err := dbService.EmailExists(req.Email)
 		if err != nil {
@@ -187,6 +186,7 @@ func RegisterHandler(dbService *services.DBService) gin.HandlerFunc {
 			FirstName:    req.FirstName,
 			LastName:     req.LastName,
 			Email:        req.Email,
+			Username:     req.Username,
 			PasswordHash: string(hashedPassword),
 			Role:         "user",
 		})
@@ -196,5 +196,73 @@ func RegisterHandler(dbService *services.DBService) gin.HandlerFunc {
 		}
 
 		c.JSON(201, gin.H{"message": "User registered successfully"})
+	}
+}
+
+func GoogleAuthHandler(c *gin.Context) {
+	// Initialize OAuth config for Google
+	config := &oauth2.Config{
+		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		RedirectURL:  "http://localhost:8080/api/v1/auth/google/callback",
+		Scopes: []string{
+			"https://www.googleapis.com/auth/userinfo.email",
+			"https://www.googleapis.com/auth/userinfo.profile",
+		},
+		Endpoint: google.Endpoint,
+	}
+
+	// Generate OAuth URL
+	url := config.AuthCodeURL("state")
+	c.JSON(http.StatusOK, gin.H{"authUrl": url})
+}
+
+func GithubAuthHandler(c *gin.Context) {
+	// Initialize OAuth config for GitHub
+	config := &oauth2.Config{
+		ClientID:     os.Getenv("GITHUB_CLIENT_ID"),
+		ClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
+		RedirectURL:  "http://localhost:8080/api/v1/auth/github/callback",
+		Scopes:       []string{"user:email"},
+		Endpoint:     github.Endpoint,
+	}
+
+	// Generate OAuth URL
+	url := config.AuthCodeURL("state")
+	c.JSON(http.StatusOK, gin.H{"authUrl": url})
+}
+
+// VerifyTokenHandler verifies if the token is still valid
+func VerifyTokenHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get token from Authorization header
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(401, gin.H{"error": "No authorization header"})
+			return
+		}
+
+		// Remove "Bearer " prefix
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+
+		// Parse and validate the token
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			return []byte("your-secret-key"), nil // Use your actual secret key
+		})
+
+		if err != nil {
+			c.JSON(401, gin.H{"error": "Invalid token"})
+			return
+		}
+
+		if !token.Valid {
+			c.JSON(401, gin.H{"error": "Token is not valid"})
+			return
+		}
+
+		c.JSON(200, gin.H{"status": "valid"})
 	}
 }
