@@ -19,14 +19,6 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-type RegisterRequest struct {
-	FirstName string `json:"firstName" binding:"required"`
-	LastName  string `json:"lastName" binding:"required"`
-	Email     string `json:"email" binding:"required,email"`
-	Username  string `json:"username" binding:"required"`
-	Password  string `json:"password" binding:"required"`
-}
-
 func validatePassword(password string) error {
 	if len(password) < 8 {
 		return fmt.Errorf("password must be at least 8 characters long")
