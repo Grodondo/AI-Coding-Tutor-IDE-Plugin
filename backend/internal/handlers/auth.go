@@ -48,8 +48,8 @@ func validatePassword(password string) error {
 	return nil
 }
 
+// Deprecated
 func verifyCaptcha(token string) error {
-	// Replace with your reCAPTCHA secret key
 	secretKey := "YOUR_RECAPTCHA_SECRET_KEY"
 
 	resp, err := http.PostForm("https://www.google.com/recaptcha/api/siteverify",
@@ -89,27 +89,20 @@ type LoginResponse struct {
 	Token string `json:"token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
 }
 
-// @Summary User authentication
-// @Description Authenticate a user and return a JWT token
-// @Tags Authentication
+// LoginHandler godoc
+// @Summary User login
+// @Description Authenticate user and return JWT token
+// @Tags authentication
 // @Accept json
 // @Produce json
 // @Param credentials body LoginRequest true "Login credentials"
-// @Success 200 {object} LoginResponse
+// @Success 200 {object} map[string]interface{} "Returns token and user info"
 // @Failure 400 {object} map[string]string "Invalid request format"
 // @Failure 401 {object} map[string]string "Invalid credentials"
-// @Router /api/v1/login [post]
+// @Failure 500 {object} map[string]string "Server error"
+// @Router /login [post]
 func LoginHandler(dbService *services.DBService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-
-		// TODO DELETE
-		/*password := "admin123"
-		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println("Bcrypt hash:", string(hash))*/
-
 		var req LoginRequest
 		if err := c.BindJSON(&req); err != nil {
 			fmt.Printf("LoginHandler: err=%v\n", err)
@@ -232,11 +225,21 @@ func GithubAuthHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"authUrl": url})
 }
 
-// VerifyTokenHandler verifies if the token is still valid
+// VerifyTokenHandler godoc
+// @Summary Verify JWT token
+// @Description Verify if the provided JWT token is valid
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Success 200 {object} map[string]interface{} "Token is valid"
+// @Failure 401 {object} map[string]string "Invalid or missing token"
+// @Router /verify-token [get]
 func VerifyTokenHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get token from Authorization header
 		authHeader := c.GetHeader("Authorization")
+		fmt.Printf("VerifyTokenHandler: authHeader=%v\n", authHeader)
 		if authHeader == "" {
 			c.JSON(401, gin.H{"error": "No authorization header"})
 			return
@@ -244,6 +247,7 @@ func VerifyTokenHandler() gin.HandlerFunc {
 
 		// Remove "Bearer " prefix
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		fmt.Printf("VerifyTokenHandler: tokenString=%v\n", tokenString)
 
 		// Parse and validate the token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -252,6 +256,7 @@ func VerifyTokenHandler() gin.HandlerFunc {
 			}
 			return []byte("your-secret-key"), nil // Use your actual secret key
 		})
+		fmt.Printf("VerifyTokenHandler: token=%v\n", token)
 
 		if err != nil {
 			c.JSON(401, gin.H{"error": "Invalid token"})
