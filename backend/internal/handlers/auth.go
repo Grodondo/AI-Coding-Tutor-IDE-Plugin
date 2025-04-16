@@ -83,12 +83,6 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required" example:"secretpass123"`
 }
 
-// LoginResponse defines the structure for authentication responses
-// @Description Login response structure
-type LoginResponse struct {
-	Token string `json:"token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
-}
-
 // LoginHandler godoc
 // @Summary User login
 // @Description Authenticate user and return JWT token
@@ -96,10 +90,10 @@ type LoginResponse struct {
 // @Accept json
 // @Produce json
 // @Param credentials body LoginRequest true "Login credentials"
-// @Success 200 {object} map[string]interface{} "Returns token and user info"
-// @Failure 400 {object} map[string]string "Invalid request format"
-// @Failure 401 {object} map[string]string "Invalid credentials"
-// @Failure 500 {object} map[string]string "Server error"
+// @Success 200 {object} map[string]interface{} "Example: {'token': 'eyJhbG...', 'user': {'username': 'johndoe', 'role': 'user'}}"
+// @Failure 400 {object} map[string]string "Example: {'error': 'Invalid request format'}"
+// @Failure 401 {object} map[string]string "Example: {'error': 'Invalid credentials'}"
+// @Failure 500 {object} map[string]string "Example: {'error': 'Failed to generate token'}"
 // @Router /login [post]
 func LoginHandler(dbService *services.DBService) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -142,6 +136,27 @@ func LoginHandler(dbService *services.DBService) gin.HandlerFunc {
 	}
 }
 
+// RegisterRequest defines the structure for registration requests
+// @Description Registration request structure
+type RegisterRequest struct {
+	FirstName string `json:"firstName" binding:"required" example:"John"`
+	LastName  string `json:"lastName" binding:"required" example:"Doe"`
+	Email     string `json:"email" binding:"required,email" example:"john.doe@example.com"`
+	Username  string `json:"username" binding:"required" example:"johndoe"`
+	Password  string `json:"password" binding:"required" example:"SecurePass123!"`
+}
+
+// RegisterHandler godoc
+// @Summary User registration
+// @Description Register a new user with their details
+// @Tags authentication
+// @Accept json
+// @Produce json
+// @Param registration body RegisterRequest true "Registration details"
+// @Success 201 {object} map[string]string "Example: {'message': 'User registered successfully'}"
+// @Failure 400 {object} map[string]string "Example: {'error': 'Invalid request format'} or {'error': 'Email already registered'} or {'error': 'Password must contain...'}"
+// @Failure 500 {object} map[string]string "Example: {'error': 'Internal server error'} or {'error': 'Failed to create user'}"
+// @Router /register [post]
 func RegisterHandler(dbService *services.DBService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req RegisterRequest

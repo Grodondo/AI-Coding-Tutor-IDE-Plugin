@@ -48,6 +48,7 @@ definitions:
     - id
     type: object
   handlers.LoginRequest:
+    description: Login request structure
     properties:
       password:
         example: secretpass123
@@ -85,6 +86,42 @@ definitions:
       response:
         example: To create a new file in Python, you can use the open() function with
           'w' mode...
+        type: string
+    type: object
+  handlers.RegisterRequest:
+    properties:
+      email:
+        type: string
+      firstName:
+        type: string
+      lastName:
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - email
+    - firstName
+    - lastName
+    - password
+    - username
+    type: object
+  handlers.Settings:
+    description: AI settings configuration
+    properties:
+      model:
+        example: gpt-3.5-turbo
+        type: string
+      prompts:
+        additionalProperties:
+          type: string
+        example:
+          '''intermediate''': '''Provide detailed analysis...''}'
+          '{''beginner''': '''Explain in simple terms...'''
+        type: object
+      provider:
+        example: openai
         type: string
     type: object
 host: localhost:8080
@@ -171,42 +208,6 @@ paths:
       summary: Submit feedback
       tags:
       - Feedback
-  /api/v1/login:
-    post:
-      consumes:
-      - application/json
-      description: Authenticate a user and return a JWT token
-      parameters:
-      - description: Login Credentials
-        in: body
-        name: credentials
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.LoginRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Returns JWT token
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "400":
-          description: Invalid request format
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Invalid credentials
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: User login
-      tags:
-      - authentication
   /api/v1/query:
     post:
       consumes:
@@ -241,6 +242,146 @@ paths:
       summary: Query the AI
       tags:
       - AI Interaction
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user and return JWT token
+      parameters:
+      - description: Login credentials
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'Example: {''token'': ''eyJhbG...'', ''user'': {''username'':
+            ''johndoe'', ''role'': ''user''}}'
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 'Example: {''error'': ''Invalid request format''}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: 'Example: {''error'': ''Invalid credentials''}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'Example: {''error'': ''Failed to generate token''}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: User login
+      tags:
+      - authentication
+  /register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user with their details
+      parameters:
+      - description: Registration details
+        in: body
+        name: registration
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 'Example: {''message'': ''User registered successfully''}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: 'Example: {''error'': ''Invalid request format''} or {''error'':
+            ''Email already registered''} or {''error'': ''Password must contain...''}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'Example: {''error'': ''Internal server error''} or {''error'':
+            ''Failed to create user''}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: User registration
+      tags:
+      - authentication
+  /settings:
+    get:
+      consumes:
+      - application/json
+      description: Update the AI provider, model and prompts configuration
+      parameters:
+      - description: AI settings configuration
+        in: body
+        name: settings
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.Settings'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Settings updated successfully
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid settings format
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update AI settings
+      tags:
+      - settings
+  /verify-token:
+    get:
+      consumes:
+      - application/json
+      description: Verify if the provided JWT token is valid
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token is valid
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Invalid or missing token
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Verify JWT token
+      tags:
+      - authentication
 securityDefinitions:
   ApiKeyAuth:
     in: header
