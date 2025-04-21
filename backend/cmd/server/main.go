@@ -71,14 +71,16 @@ func main() {
 		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
+		ExposeHeaders:    []string{"Content-Length", "Set-Cookie"},
 		AllowCredentials: true,
 		MaxAge:           12 * 60 * 60, // 12 hours
 	}))
 
 	// Api routes
 	router.GET("api/v1/verify-token", handlers.VerifyTokenHandler())
-	router.GET("api/v1/settings", handlers.UpdateSettingsHandler(dbService, settingsService))
+	router.GET("api/v1/settings", handlers.GetSettingsHandler(dbService, settingsService))
+	router.POST("api/v1/settings", handlers.UpdateSettingsHandler(dbService, settingsService))
+	router.DELETE("api/v1/settings/:service", handlers.DeleteSettingsHandler(dbService, settingsService))
 	router.POST("api/v1/query", handlers.QueryHandler(aiService, dbService, settingsService))
 	router.POST("api/v1/analyze", handlers.AnalyzeHandler(aiService, dbService, settingsService))
 	router.POST("api/v1/feedback", handlers.FeedbackHandler(dbService))

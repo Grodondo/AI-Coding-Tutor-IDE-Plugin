@@ -29,6 +29,20 @@ namespace handlers {
         + Response string
 
     }
+    class RegisterRequest << (S,Aquamarine) >> {
+        + FirstName string
+        + LastName string
+        + Email string
+        + Username string
+        + Password string
+
+    }
+    class Settings << (S,Aquamarine) >> {
+        + AIProvider string
+        + AIModel string
+        + Prompts <font color=blue>map</font>[string]string
+
+    }
 }
 
 
@@ -73,6 +87,8 @@ namespace services {
     class DBService << (S,Aquamarine) >> {
         - db *sql.DB
 
+        + EmailExists(email string) (bool, error)
+        + CreateUser(user User) error
         + UpdateSettings(service string, configJSON string) error
         + GetUserCredentials(username string) (string, string, error)
         + CreateQuery(q *models.Query) error
@@ -85,6 +101,15 @@ namespace services {
 
         + LoadAiSettings() error
         + GetAiSettings(service models.ServiceType) (*AiSettings, error)
+
+    }
+    class User << (S,Aquamarine) >> {
+        + FirstName string
+        + LastName string
+        + Email string
+        + Username string
+        + PasswordHash string
+        + Role string
 
     }
 }

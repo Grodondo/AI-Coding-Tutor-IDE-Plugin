@@ -57,6 +57,15 @@ func (s *DBService) CreateUser(user User) error {
 	return nil
 }
 
+// DeleteSettings deletes settings for a specific service
+func (s *DBService) DeleteSettings(service string) error {
+	_, err := s.db.Exec("DELETE FROM settings WHERE service = $1", service)
+	if err != nil {
+		return fmt.Errorf("failed to delete settings: %v", err)
+	}
+	return nil
+}
+
 // UpdateSettings inserts or updates settings for a specific service
 func (s *DBService) UpdateSettings(service, configJSON string) error {
 	// Use UPSERT to update if exists, insert if not

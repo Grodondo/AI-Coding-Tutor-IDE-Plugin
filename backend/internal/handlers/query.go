@@ -12,8 +12,9 @@ import (
 // QueryRequest defines the structure for AI query requests
 // @Description Query request structure for AI interactions
 type QueryRequest struct {
-	Query string `json:"query" binding:"required" example:"How do I create a new file in Python?"`
-	Level string `json:"level" binding:"required" example:"beginner" enums:"beginner,intermediate,advanced"`
+	Query   string `json:"query" binding:"required" example:"How do I create a new file in Python?"`
+	Level   string `json:"level" binding:"required" example:"beginner" enums:"beginner,intermediate,advanced"`
+	Context string `json:"context,omitempty"`
 }
 
 // QueryResponse defines the structure for AI query responses
@@ -56,7 +57,11 @@ func QueryHandler(aiService *services.AIService, dbService *services.DBService, 
 			c.JSON(400, gin.H{"error": "Invalid level"})
 			return
 		}
-		prompt := promptTemplate + req.Query
+		prompt := promptTemplate
+		if req.Context != "" {
+			prompt += "\nPrevious conversation:\n" + req.Context + "\n\nCurrent query: "
+		}
+		prompt += req.Query
 
 		// Get AI response
 		response, err := aiService.GetResponse("query", ai_settings.AIProvider, ai_settings.AIModel, prompt)

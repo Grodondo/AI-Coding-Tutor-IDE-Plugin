@@ -4,4 +4,6 @@ node_modules
 .vscode-test/
 *.vsix
 .env
+
 frontend/webpage/*
+frontend/AI-Coding-Tutor-Webpage/*
