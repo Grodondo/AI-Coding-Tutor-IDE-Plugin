@@ -9,14 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Settings defines the structure for AI settings
-// @Description AI settings configuration
-type Settings struct {
-	AIProvider string            `json:"provider" example:"openai"`
-	AIModel    string            `json:"model" example:"gpt-3.5-turbo"`
-	Prompts    map[string]string `json:"prompts" example:"{'beginner':'Explain in simple terms...','intermediate':'Provide detailed analysis...'}"`
-}
-
 // GetSettingsHandler godoc
 // @Summary Get AI settings
 // @Description Retrieve the current AI settings for all services
@@ -29,6 +21,7 @@ type Settings struct {
 func GetSettingsHandler(dbService *services.DBService, settingsService *services.SettingsService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		settings := make(map[string]*services.AiSettings)
+		//TODO Change serviceType for a function inside the db service that returns as strings all of the services
 		for _, service := range []models.ServiceType{models.QueryService, models.AnalyzeService} {
 			setting, err := settingsService.GetAiSettings(service)
 			if err != nil {
@@ -86,6 +79,17 @@ func UpdateSettingsHandler(dbService *services.DBService, settingsService *servi
 	}
 }
 
+// DeleteSettingsHandler godoc
+// @Summary Delete AI settings
+// @Description Delete the AI settings for a specific service
+// @Tags settings
+// @Accept json
+// @Produce json
+// @Param service path string true "Service name"
+// @Success 200 {object} map[string]string "Settings deleted successfully"
+// @Failure 400 {object} map[string]string "Invalid request format"
+// @Failure 500 {object} map[string]string "Server error"
+// @Router /settings/{service} [delete]
 func DeleteSettingsHandler(dbService *services.DBService, settingsService *services.SettingsService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Extract the service parameter from the URL

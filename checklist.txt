@@ -23,17 +23,34 @@ swag init -g cmd/server/main.go
 Once the server is running:
 http://localhost:8080/swagger/index.html
 
+-- Password is 'admin123' (hashed with bcrypt)
+INSERT INTO users (username, password_hash, role) VALUES 
+('admin', '$2a$10$Ne4zZEZ6cU9686KZHYhLTebWU0vV464txY1yYnt8I/1zZffKQBdZW', 'admin');
 
+INSERT INTO users (first_name, last_name, email, username, password_hash, role) 
+VALUES (
+    'John',
+    'Doe',
+    'grodondo@example.com',
+    'admin',
+    '$2a$10$Ne4zZEZ6cU9686KZHYhLTebWU0vV464txY1yYnt8I/1zZffKQBdZW',  
+    'admin'
+);
 
 
 TODO LIST
 -La extension no deberia de actualizarse automaticamente con el paso del tiempo.
 -"Get suggestion" puede ser alterado, actualmente cuando hacer hover, te da el consejo, pero si le das click devuelve un error.
 -Por ver: CUando se le de click, podria generarte una sugerencia mas detallada y que se vea de forma mas visual
--La pantalla a la izquierda merece cambios.
 -Idea: Se podria eliminar el texto "Ger suggestion" all together para minimizar la intrusion de la ia, y cuando le das click, que aparte del mensaje que muestra sobre las posibles mejoras, aparezca a al derecha un boton para que te haga las correcciones automaticamente.
--Mejorar el promt, especificamente el de analyze.
+
+--NUEVOS
 -Elegir un proveedor de cloud 
--Implementar una documentacion (swagger quizas tmb for the backend)
--Add logs for frontend or backend(perhaps add a .dockerignore if added logs on back)
 -Añadir opcion de lenguage de la ia a la derecha, solo habria que cambiar el promt a español de momento.
+-Add more routes to the frontendpage 
+-Fix the fucking dark/light mode setting on the page (I hate you)
+-Permitir que los chats recuerden
+-Revisar el tema de los settings analyze y query siendo unicos, a lo mejor no permitir que se eliminen esos dos por ejemplo
+-Extension, mejorar.
+-Solucionar el tema de los registros de usuario
+
