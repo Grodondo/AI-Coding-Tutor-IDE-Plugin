@@ -17,12 +17,12 @@
   "main": "./dist/extension.js",
   "contributes": {
     "configuration": {
-    "title": "AI Coding Tutor",
-    "properties": {
-      "aiCodingTutor.backendUrl": {
-        "type": "string",
-        "default": "http://localhost:8080",
-        "description": "URL of the AI Coding Tutor backend"
+      "title": "AI Coding Tutor",
+      "properties": {
+        "aiCodingTutor.backendUrl": {
+          "type": "string",
+          "default": "http://localhost:8080",
+          "description": "URL of the AI Coding Tutor backend"
         }
       }
     },
@@ -74,6 +74,7 @@
     "test": "vscode-test"
   },
   "devDependencies": {
+    "@types/lodash": "^4.17.16",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@types/node-fetch": "^2.6.12",
@@ -89,6 +90,7 @@
     "webpack-cli": "^6.0.1"
   },
   "dependencies": {
+    "lodash": "^4.17.21",
     "node-fetch": "^2.7.0"
   }
 }
