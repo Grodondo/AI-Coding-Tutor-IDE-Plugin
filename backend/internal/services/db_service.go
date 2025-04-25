@@ -66,8 +66,27 @@ func (s *DBService) DeleteSettings(service string) error {
 	return nil
 }
 
+// GetAllUniqueServices retrieves all unique services from the database (settings table)
+func (s *DBService) GetAllUniqueServices() ([]string, error) {
+	rows, err := s.db.Query("SELECT DISTINCT service FROM settings")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get unique services: %v", err)
+	}
+	defer rows.Close()
+
+	var services []string
+	for rows.Next() {
+		var service string
+		if err := rows.Scan(&service); err != nil {
+			return nil, fmt.Errorf("failed to scan service: %v", err)
+		}
+		services = append(services, service)
+	}
+	return services, nil
+}
+
 // UpdateSettings inserts or updates settings for a specific service
-func (s *DBService) UpdateSettings(service, configJSON string) error {
+func (s *DBService) UpdateOrInsertSettings(service, configJSON string) error {
 	// Use UPSERT to update if exists, insert if not
 	_, err := s.db.Exec(`
         INSERT INTO settings (service, config) 
@@ -79,6 +98,19 @@ func (s *DBService) UpdateSettings(service, configJSON string) error {
 		return fmt.Errorf("failed to update settings: %v", err)
 	}
 	return nil
+}
+
+// GetSettings retrieves settings for a specific service
+func (s *DBService) GetSettingsFromService(service string) (string, error) {
+	var configJSON string
+	err := s.db.QueryRow("SELECT config FROM settings WHERE service = $1", service).Scan(&configJSON)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("settings not found for service: %s", service)
+		}
+		return "", fmt.Errorf("failed to get settings: %v", err)
+	}
+	return configJSON, nil
 }
 
 // GetUserCredentials retrieves the password hash and role for a given username

@@ -40,8 +40,12 @@ func Decrypt(ciphertext string, key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	nonce, ciphertext := data[:gcm.NonceSize()], data[gcm.NonceSize():]
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	nonceSize := gcm.NonceSize()
+	if len(data) < nonceSize {
+		return "", err
+	}
+	nonce, encryptedData := data[:nonceSize], data[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, encryptedData, nil)
 	if err != nil {
 		return "", err
 	}

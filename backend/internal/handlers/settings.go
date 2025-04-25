@@ -3,9 +3,11 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/models"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
+	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -21,14 +23,18 @@ import (
 func GetSettingsHandler(dbService *services.DBService, settingsService *services.SettingsService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		settings := make(map[string]*services.AiSettings)
-		//TODO Change serviceType for a function inside the db service that returns as strings all of the services
-		for _, service := range []models.ServiceType{models.QueryService, models.AnalyzeService} {
+		providers, err := dbService.GetAllUniqueServices()
+		if err != nil {
+			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to get providers: %v", err)})
+			return
+		}
+		for _, service := range providers {
 			setting, err := settingsService.GetAiSettings(service)
 			if err != nil {
 				c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to retrieve settings: %v", err)})
 				return
 			}
-			settings[service.String()] = setting
+			settings[service] = setting
 		}
 		c.JSON(200, settings)
 	}
@@ -52,19 +58,51 @@ func UpdateSettingsHandler(dbService *services.DBService, settingsService *servi
 			Service string          `json:"service" binding:"required"`
 			Config  json.RawMessage `json:"config" binding:"required"`
 		}
+
 		if err := c.BindJSON(&req); err != nil {
 			c.JSON(400, gin.H{"error": "Invalid request format"})
 			return
 		}
 
-		configJSON, err := json.Marshal(req.Config)
+		// Get encryption key from environment
+		encryptionKey := os.Getenv("ENCRYPTION_KEY")
+		if encryptionKey == "" {
+			c.JSON(500, gin.H{"error": "Encryption key not set"})
+			return
+		}
+
+		// Unmarshal config to extract and encrypt the API key
+		var configMap map[string]interface{}
+		if err := json.Unmarshal(req.Config, &configMap); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid config format"})
+			return
+		}
+
+		// Extract and encrypt the API key
+		apiKey, ok := configMap["api_key"].(string)
+		if !ok {
+			c.JSON(400, gin.H{"error": "API key is missing or invalid"})
+			return
+		}
+		encryptedApiKey, err := utils.Encrypt(apiKey, encryptionKey)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to encrypt API key"})
+			return
+		}
+
+		// Update config map with encrypted API key
+		delete(configMap, "api_key")
+		configMap["encrypted_api_key"] = encryptedApiKey
+
+		// Marshal modified config back to JSON
+		configJSON, err := json.Marshal(configMap)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to marshal settings"})
 			return
 		}
 
 		// Use DBService to update settings
-		if err := dbService.UpdateSettings(req.Service, string(configJSON)); err != nil {
+		if err := dbService.UpdateOrInsertSettings(req.Service, string(configJSON)); err != nil {
 			c.JSON(500, gin.H{"error": "Failed to update settings"})
 			return
 		}
@@ -74,7 +112,7 @@ func UpdateSettingsHandler(dbService *services.DBService, settingsService *servi
 			c.JSON(500, gin.H{"error": "Failed to load settings"})
 			return
 		}
-
+		// Return success response
 		c.JSON(200, gin.H{"status": "success"})
 	}
 }
@@ -96,6 +134,12 @@ func DeleteSettingsHandler(dbService *services.DBService, settingsService *servi
 		service := c.Param("service")
 		if service == "" {
 			c.JSON(400, gin.H{"error": "Service name is required"})
+			return
+		}
+
+		// Validate the service name
+		if service == string(models.QueryService) || service == string(models.AnalyzeService) {
+			c.JSON(400, gin.H{"error": "Cannot delete settings for query or analyze service"})
 			return
 		}
 

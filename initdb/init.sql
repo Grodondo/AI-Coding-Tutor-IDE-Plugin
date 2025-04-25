@@ -38,7 +38,7 @@ INSERT INTO settings (service, config) VALUES
 ('query', '{
     "ai_provider": "groq",
     "ai_model": "llama-3.3-70b-versatile",
-    "encrypted_api_key": "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",
+    "encrypted_api_key": "HpK9QczqoknJOk1T2Jk3oa8/mx6/0RrNBpU/Udfaqmafcj6bx3l/EAgVBbiZjeon3TOSriyGFbgDZ+FIxXR4v5XUvtdZoKbGEjGaqcivDOMFVC54",
     "prompts": {
         "novice": "Explain simply...",
         "medium": "Provide a detailed analysis...",
@@ -48,10 +48,27 @@ INSERT INTO settings (service, config) VALUES
 ('analyze', '{
     "ai_provider": "groq",
     "ai_model": "llama-3.3-70b-versatile",
-    "encrypted_api_key": "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",
+    "encrypted_api_key": "HpK9QczqoknJOk1T2Jk3oa8/mx6/0RrNBpU/Udfaqmafcj6bx3l/EAgVBbiZjeon3TOSriyGFbgDZ+FIxXR4v5XUvtdZoKbGEjGaqcivDOMFVC54",
     "prompts": {
         "novice": "Explain simply...",
         "medium": "Provide a detailed analysis...",
         "expert": "Give a technical breakdown..."
     }
 }');
+
+INSERT INTO users (first_name, last_name, email, username, password_hash, role) 
+VALUES (
+    'John',
+    'Doe',
+    'grodondo@example.com',
+    'admin',
+    '$2a$10$MQoGOfXKw5Ond78KbiwmoO3exudMI8j3IurJoJuRGWRkjVEvo3pmW',  
+    'admin'
+),(
+    'Jane',
+    'Smith',
+    'jane.smith@example.com',
+    'user',
+    '$2a$10$tLF0pvZVv.oiqN5eXkEkLOaTLKDlxxBF2k3xETkETSEjWJwerLDpi',  
+    'user'
+);

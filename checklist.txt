@@ -3,6 +3,7 @@ No deberia hacer falta: docker run -p 8080:8080 -e AI_API_KEY=gsk_6gsyPv40Net2qL
 #DOCKER
 docker ps (-a)
 docker-compose up (-d --build)
+docker-compose down -v --remove-orphans    --NOT THE ORPHANSSSSS
 docker exec -it ai-coding-tutor-ide-plugin-backend-1 /bin/bash    (or bin/sh)
 docker exec -it ai-coding-tutor-ide-plugin-backend-1 env  (to see env variables, "env" inside the container also works)
 docker logs container_name  (to check docker logs and ensure api key is setup)
@@ -23,10 +24,7 @@ swag init -g cmd/server/main.go
 Once the server is running:
 http://localhost:8080/swagger/index.html
 
--- Password is 'admin123' (hashed with bcrypt)
-INSERT INTO users (username, password_hash, role) VALUES 
-('admin', '$2a$10$Ne4zZEZ6cU9686KZHYhLTebWU0vV464txY1yYnt8I/1zZffKQBdZW', 'admin');
-
+-- Password is 'admin' (hashed with bcrypt)
 INSERT INTO users (first_name, last_name, email, username, password_hash, role) 
 VALUES (
     'John',
@@ -36,6 +34,11 @@ VALUES (
     '$2a$10$Ne4zZEZ6cU9686KZHYhLTebWU0vV464txY1yYnt8I/1zZffKQBdZW',  
     'admin'
 );
+
+
+#ENCRYPTION
+ENCRYPTION_KEY=12345678901234567890123456789012
+Current used api key: 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
 
 
 TODO LIST

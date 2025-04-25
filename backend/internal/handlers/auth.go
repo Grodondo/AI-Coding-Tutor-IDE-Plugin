@@ -19,6 +19,8 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
+var encryptionKey string = os.Getenv("ENCRYPTION_KEY")
+
 func validatePassword(password string) error {
 	if len(password) < 8 {
 		return fmt.Errorf("password must be at least 8 characters long")
@@ -91,14 +93,16 @@ func LoginHandler(dbService *services.DBService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req LoginRequest
 		if err := c.BindJSON(&req); err != nil {
-			fmt.Printf("LoginHandler: err=%v\n", err)
+			fmt.Printf("LoginHandler: err=%v\n | Invalid request format", err)
 			c.JSON(400, gin.H{"error": "Invalid request format"})
 			return
 		}
 
 		passwordHash, role, err := dbService.GetUserCredentials(req.Username)
+		fmt.Printf("LoginHandler: passwordHash=%v\n | role=%v\n | err=%v\n", passwordHash, role, err)
+		fmt.Printf("LoginHandler: req.Password=%v\n", req.Password)
 		if err != nil || bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)) != nil {
-			fmt.Printf("LoginHandler: err=%v\n", err)
+			fmt.Printf("LoginHandler: err=%v\n | Invalid credentials", err)
 			c.JSON(401, gin.H{"error": "Invalid credentials"})
 			return
 		}
@@ -110,9 +114,8 @@ func LoginHandler(dbService *services.DBService) gin.HandlerFunc {
 			"exp":      time.Now().Add(time.Hour * 24).Unix(),
 		})
 
-		//TODO CHANGE SECRET KEY TO ENV VAR
 		// Sign the token with your secret key
-		tokenString, err := token.SignedString([]byte("your-secret-key")) // Replace with env variable in production
+		tokenString, err := token.SignedString([]byte(encryptionKey))
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to generate token"})
 			return
@@ -261,7 +264,7 @@ func VerifyTokenHandler() gin.HandlerFunc {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
-			return []byte("your-secret-key"), nil // Use your actual secret key
+			return []byte(encryptionKey), nil
 		})
 		fmt.Printf("VerifyTokenHandler: token=%v\n", token)
 

@@ -9,7 +9,7 @@ services:
       - DB_USER=user
       - DB_PASSWORD=password
       - DB_NAME=mydb
-      - AI_API_KEY=${AI_API_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
     depends_on:
       - db
   db:

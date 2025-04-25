@@ -3,7 +3,6 @@ package handlers
 import (
 	"strings"
 
-	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/models"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
 	"github.com/gin-gonic/gin"
 )
@@ -41,7 +40,7 @@ func AnalyzeHandler(aiService *services.AIService, dbService *services.DBService
 		}
 
 		// Construct prompt for full code analysis
-		ai_settings, err := settingsService.GetAiSettings(models.AnalyzeService)
+		ai_settings, err := settingsService.GetAiSettings("analyze")
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to get settings"})
 			return

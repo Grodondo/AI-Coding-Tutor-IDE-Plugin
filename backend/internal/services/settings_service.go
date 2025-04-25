@@ -3,8 +3,9 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
-	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/models"
+	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/utils"
 )
 
 // Settings holds the AI configuration
@@ -42,39 +43,54 @@ func (ss *SettingsService) LoadAiSettings() error {
 	}
 	defer rows.Close()
 
-	// encryptionKey := os.Getenv("ENCRYPTION_KEY")
-	// if encryptionKey == "" {
-	// 	return fmt.Errorf("ENCRYPTION_KEY not set")
-	// }
+	encryptionKey := os.Getenv("ENCRYPTION_KEY")
+	if encryptionKey == "" {
+		return fmt.Errorf("ENCRYPTION_KEY not set")
+	}
 
 	for rows.Next() {
 		var service, configJSON string
 		if err := rows.Scan(&service, &configJSON); err != nil {
 			return err
 		}
+
 		var settings AiSettings
 		if err := json.Unmarshal([]byte(configJSON), &settings); err != nil {
 			return err
 		}
-		//TODO add encryption later
-		// apiKey, err := utils.Decrypt(settings.EncryptedAPIKey, encryptionKey)
-		// if err != nil {
-		// 	return err
-		// }
-		// settings.APIKey = apiKey
-		settings.APIKey = settings.EncryptedAPIKey
+
+		// Decrypt the API key
+		apiKey, err := utils.Decrypt(settings.EncryptedAPIKey, encryptionKey)
+		if err != nil {
+			return err
+		}
+		settings.APIKey = apiKey
 		ss.settings[service] = &settings
 	}
 	return nil
 }
 
 // GetSettings retrieves settings for a specific service
-func (ss *SettingsService) GetAiSettings(service models.ServiceType) (*AiSettings, error) {
-	if !service.IsValid() {
-		return nil, fmt.Errorf("invalid service type: %s", service)
+func (ss *SettingsService) GetAiSettings(service string) (*AiSettings, error) {
+	uniqueProviders, err := ss.dbService.GetAllUniqueServices()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get unique providers: %v", err)
 	}
 
-	settings, exists := ss.settings[service.String()]
+	// Check if the service is in the list of unique providers
+	found := false
+	for _, provider := range uniqueProviders {
+		if provider == service {
+			found = true
+			break
+		}
+	}
+	// If the service is not found, return an error
+	if !found {
+		return nil, fmt.Errorf("service %s not found in settings", service)
+	}
+
+	settings, exists := ss.settings[service]
 	if !exists {
 		return nil, fmt.Errorf("no settings for service: %s", service)
 	}

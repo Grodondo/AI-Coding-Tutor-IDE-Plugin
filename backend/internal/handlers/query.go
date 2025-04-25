@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/models"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
@@ -47,7 +48,7 @@ func QueryHandler(aiService *services.AIService, dbService *services.DBService, 
 		id := uuid.New().String()
 
 		// Settings service to get the prompt template
-		ai_settings, err := settingsService.GetAiSettings(models.QueryService)
+		ai_settings, err := settingsService.GetAiSettings("query")
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to get settings"})
 			return
@@ -66,11 +67,12 @@ func QueryHandler(aiService *services.AIService, dbService *services.DBService, 
 		// Get AI response
 		response, err := aiService.GetResponse("query", ai_settings.AIProvider, ai_settings.AIModel, prompt)
 		if err != nil {
+			fmt.Printf("QueryHandler: err=%v\n", err)
 			c.JSON(500, gin.H{"error": "Failed to get AI response"})
 			return
 		}
 
-		fmt.Printf("QueryHandler: response=%s\n", response)
+		fmt.Printf("Response recieved: %s\n", strings.Split(response, "\n")[0])
 
 		// Store in database
 		query := &models.Query{
