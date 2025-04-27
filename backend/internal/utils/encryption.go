@@ -8,7 +8,7 @@ import (
 	"io"
 )
 
-// Encrypt encrypts a string using AES-256 with the provided key
+// Encrypt encrypts a string using AES-256 with the provided key (32 bytes key)
 func Encrypt(plaintext string, key string) (string, error) {
 	block, err := aes.NewCipher([]byte(key))
 	if err != nil {
@@ -26,7 +26,7 @@ func Encrypt(plaintext string, key string) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-// Decrypt decrypts a base64-encoded encrypted string using AES-256
+// Decrypt decrypts a base64-encoded encrypted string using AES-256 (32 bytes key)
 func Decrypt(ciphertext string, key string) (string, error) {
 	data, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {

@@ -11,15 +11,38 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// ServiceConfig describes the POST body for UpdateSettingsHandler.
+// swagger:model ServiceConfig
+type ServiceConfig struct {
+	// the unique service name, e.g. "query"
+	// required: true
+	Service string `json:"service"`
+
+	// config for this service
+	// required: true
+	Config struct {
+		 // which AI provider to use
+		 // required: true
+		 AIProvider string `json:"ai_provider"`
+		 // model identifier
+		 // required: true
+		 AIModel string `json:"ai_model"`
+		 // raw API key; server will encrypt this
+		 // required: true
+		 APIKey string `json:"api_key"`
+		 // named prompts
+		 Prompts map[string]string `json:"prompts"`
+	} `json:"config"`
+}
+
 // GetSettingsHandler godoc
-// @Summary Get AI settings
-// @Description Retrieve the current AI settings for all services
-// @Tags settings
-// @Accept json
-// @Produce json
-// @Success 200 {object} map[string]*services.AiSettings "Current settings for all services"
-// @Failure 500 {object} map[string]string "Error retrieving settings"
-// @Router /settings [get]
+// @Summary   Get AI settings
+// @Description  Return for each service: provider, model, encrypted_api_key, and prompts
+// @Tags      settings
+// @Produce   json
+// @Success   200  {object} map[string]*services.AiSettings
+// @Failure   500  {object} map[string]string
+// @Router    /settings [get]
 func GetSettingsHandler(dbService *services.DBService, settingsService *services.SettingsService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		settings := make(map[string]*services.AiSettings)
@@ -41,16 +64,16 @@ func GetSettingsHandler(dbService *services.DBService, settingsService *services
 }
 
 // UpdateSettingsHandler godoc
-// @Summary Update AI settings
-// @Description Update the AI provider, model and prompts configuration for a specific service
-// @Tags settings
-// @Accept json
-// @Produce json
-// @Param request body ServiceConfig true "Service configuration update request"
-// @Success 200 {object} map[string]string "Settings updated successfully"
-// @Failure 400 {object} map[string]string "Invalid request format"
-// @Failure 500 {object} map[string]string "Server error"
-// @Router /settings [post]
+// @Summary   Update AI settings
+// @Description  Accepts raw api_key; server will encrypt it and store under encrypted_api_key
+// @Tags      settings
+// @Accept    json
+// @Produce   json
+// @Param     request  body  handlers.ServiceConfig  true  "Service configuration update request"
+// @Success   200  {object} map[string]string  "status: success"
+// @Failure   400  {object} map[string]string  "Invalid request format or missing api_key"
+// @Failure   500  {object} map[string]string  "Server error encrypting or saving"
+// @Router    /settings [post]
 func UpdateSettingsHandler(dbService *services.DBService, settingsService *services.SettingsService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Bind request body

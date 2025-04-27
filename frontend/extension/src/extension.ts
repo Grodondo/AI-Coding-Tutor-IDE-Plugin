@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import fetch from 'node-fetch';
 import { debounce } from 'lodash';
+import * as fs from 'fs';
+import * as path from 'path';
+import ignore from 'ignore';
 
 // Decoration type for AI suggestions and loading states
 const aiResponseDecorationType = vscode.window.createTextEditorDecorationType({
@@ -12,15 +15,16 @@ const aiResponseDecorationType = vscode.window.createTextEditorDecorationType({
     }
 });
 
-// Interfaces for backend responses
+// Interfaces for backend responses and local cache
 interface SuggestionResponse {
     suggestion: string;
     explanation: string;
     documentationLink?: string;
+    diff?: string;
 }
 
 interface AnalysisResponse {
-    suggestions: { line: number; message: string; explanation?: string }[];
+    suggestions: { line: number; message: string; explanation?: string; diff?: string }[];
 }
 
 interface QueryResponse {
@@ -28,9 +32,23 @@ interface QueryResponse {
     response: string;
 }
 
+interface CachedIndex {
+    files: string[];
+    lastIndexed: number;
+}
+
 function getBackendUrl(): string {
     const config = vscode.workspace.getConfiguration('aiCodingTutor');
     return config.get('backendUrl', 'http://localhost:8080');
+}
+
+function readAugmentIgnore(workspacePath: string): string[] {
+    const ignorePath = path.join(workspacePath, '.augmentignore');
+    if (fs.existsSync(ignorePath)) {
+        const ig = ignore().add(fs.readFileSync(ignorePath, 'utf8'));
+        return ig.createFilter() as any; // Simplified for demo; in practice, filter paths
+    }
+    return [];
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -38,8 +56,8 @@ export function activate(context: vscode.ExtensionContext) {
 
     let isActive = true;
     let proficiency = context.globalState.get('ai-coding-tutor.proficiency', 'novice');
-    let analysisInterval: NodeJS.Timeout | undefined;
     const suggestionCache = new Map<number, SuggestionResponse>();
+    const indexCache = new Map<string, CachedIndex>();
 
     const codeLensEmitter = new vscode.EventEmitter<void>();
     const suggestionProvider = new SuggestionCodeLensProvider(codeLensEmitter);
@@ -67,8 +85,10 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('ai-coding-tutor.toggleActivation', () => {
             isActive = !isActive;
             treeDataProvider.refresh();
-            if (isActive) startPeriodicAnalysis();
-            else stopPeriodicAnalysis();
+            if (!isActive) {
+                suggestionProvider.updateSuggestions([]);
+                codeLensEmitter.fire();
+            }
             vscode.window.showInformationMessage(`Extension ${isActive ? 'activated' : 'deactivated'}`);
         }),
         vscode.commands.registerCommand('ai-coding-tutor.askQuery', async () => {
@@ -96,10 +116,7 @@ export function activate(context: vscode.ExtensionContext) {
             } catch (error) {
                 vscode.window.showErrorMessage(`Query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
-        })
-    );
-
-    context.subscriptions.push(
+        }),
         vscode.commands.registerCommand('ai-coding-tutor.getSuggestion', async (lineNumber?: number) => {
             if (!isActive || !vscode.window.activeTextEditor) return;
             const editor = vscode.window.activeTextEditor;
@@ -123,57 +140,77 @@ export function activate(context: vscode.ExtensionContext) {
                 vscode.window.showErrorMessage(`Failed to get suggestion: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
         }),
-        vscode.commands.registerCommand('ai-coding-tutor.feedback', async (args: { response: string; helpful: boolean }) => {
-            await sendFeedbackToBackend(args.response, args.helpful);
-            vscode.window.showInformationMessage(`Thanks for your feedback!`);
+        vscode.commands.registerCommand('ai-coding-tutor.analyzeCode', async () => {
+            if (!isActive || !vscode.window.activeTextEditor) return;
+            const editor = vscode.window.activeTextEditor;
+            const document = editor.document;
+            const workspacePath = vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath;
+            if (!workspacePath) return;
+
+            const cached = indexCache.get(workspacePath);
+            const now = Date.now();
+            if (!cached || now - cached.lastIndexed > 3600000) { // Refresh every hour
+                const exclusions = readAugmentIgnore(workspacePath);
+                const files = await indexWorkspace(workspacePath, exclusions);
+                indexCache.set(workspacePath, { files, lastIndexed: now });
+            }
+
+            const fullText = document.getText();
+            try {
+                const suggestions = await fetchFullCodeSuggestions(fullText, proficiency);
+                suggestionProvider.updateSuggestions(suggestions);
+                codeLensEmitter.fire();
+            } catch (error) {
+                vscode.window.showErrorMessage(`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
         })
     );
 
-    const debouncedAnalysis = debounce(async () => {
-        if (!isActive || !vscode.window.activeTextEditor) {
-            console.log('Analysis skipped: Extension inactive or no active editor');
+    const debouncedAnalysis = debounce(async (document: vscode.TextDocument) => {
+        if (!isActive || !vscode.window.activeTextEditor || vscode.window.activeTextEditor.document.uri.toString() !== document.uri.toString()) {
             return;
         }
-        console.log('Running periodic analysis');
-        const editor = vscode.window.activeTextEditor;
-        const document = editor.document;
         const fullText = document.getText();
         try {
             const suggestions = await fetchFullCodeSuggestions(fullText, proficiency);
-            console.log(`Analysis completed: ${suggestions.length} suggestions received`);
             suggestionProvider.updateSuggestions(suggestions);
             codeLensEmitter.fire();
         } catch (error) {
-            console.error(`Analysis error: ${error instanceof Error ? error.message : 'Unknown error'}`);
             vscode.window.showWarningMessage(`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-    }, 15000);
-
-    function startPeriodicAnalysis() {
-        if (analysisInterval) return;
-        debouncedAnalysis();
-        analysisInterval = setInterval(debouncedAnalysis, 15000);
-    }
-
-    function stopPeriodicAnalysis() {
-        if (analysisInterval) {
-            clearInterval(analysisInterval);
-            analysisInterval = undefined;
-            suggestionProvider.updateSuggestions([]);
-            codeLensEmitter.fire();
-        }
-    }
-
-    if (isActive) startPeriodicAnalysis();
+    }, 5000);
 
     context.subscriptions.push(
+        vscode.workspace.onDidSaveTextDocument((document) => {
+            if (isActive) {
+                debouncedAnalysis(document);
+            }
+        }),
         vscode.window.onDidChangeActiveTextEditor(() => {
             suggestionProvider.updateSuggestions([]);
             suggestionCache.clear();
             codeLensEmitter.fire();
-        }),
-        vscode.workspace.onDidChangeTextDocument(() => debouncedAnalysis())
+        })
     );
+}
+
+async function indexWorkspace(workspacePath: string, exclusions: string[]): Promise<string[]> {
+    const files: string[] = [];
+    const walker = async (dir: string) => {
+        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+        for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            const relPath = path.relative(workspacePath, fullPath);
+            if (exclusions.some(ex => relPath.startsWith(ex))) continue;
+            if (entry.isDirectory()) {
+                await walker(fullPath);
+            } else {
+                files.push(fullPath);
+            }
+        }
+    };
+    await walker(workspacePath);
+    return files;
 }
 
 class AiTutorTreeDataProvider implements vscode.TreeDataProvider<AiTutorTreeItem> {
@@ -198,7 +235,8 @@ class AiTutorTreeDataProvider implements vscode.TreeDataProvider<AiTutorTreeItem
         const { isActive, proficiency } = this.getState();
         return [
             new AiTutorTreeItem(`Status: ${isActive ? 'Active' : 'Inactive'}`, 'ai-coding-tutor.toggleActivation', isActive ? 'check' : 'circle-slash'),
-            new AiTutorTreeItem(`Level: ${proficiency}`, 'ai-coding-tutor.selectLevel', 'gear')
+            new AiTutorTreeItem(`Level: ${proficiency}`, 'ai-coding-tutor.selectLevel', 'gear'),
+            new AiTutorTreeItem('Analyze Code', 'ai-coding-tutor.analyzeCode', 'refresh')
         ];
     }
 }
@@ -212,7 +250,7 @@ class AiTutorTreeItem extends vscode.TreeItem {
 }
 
 class SuggestionCodeLensProvider implements vscode.CodeLensProvider {
-    private suggestions: { line: number; message: string; explanation: string }[] = [];
+    private suggestions: { line: number; message: string; explanation: string; diff?: string }[] = [];
 
     constructor(private emitter: vscode.EventEmitter<void>) {
         this.onDidChangeCodeLenses = emitter.event;
@@ -220,7 +258,7 @@ class SuggestionCodeLensProvider implements vscode.CodeLensProvider {
 
     onDidChangeCodeLenses?: vscode.Event<void>;
 
-    updateSuggestions(suggestions: { line: number; message: string; explanation: string }[]) {
+    updateSuggestions(suggestions: { line: number; message: string; explanation: string; diff?: string }[]) {
         this.suggestions = suggestions;
     }
 
@@ -250,6 +288,7 @@ function createLoadingDecoration(lineNumber: number): vscode.DecorationOptions {
 }
 
 function createResponseDecoration(lineNumber: number, response: SuggestionResponse): vscode.DecorationOptions {
+    const diffText = response.diff ? `\n\n**Diff Preview:**\n\`\`\`diff\n${response.diff}\n\`\`\`` : '';
     return {
         range: new vscode.Range(lineNumber, 0, lineNumber, 0),
         renderOptions: {
@@ -258,7 +297,7 @@ function createResponseDecoration(lineNumber: number, response: SuggestionRespon
             }
         },
         hoverMessage: new vscode.MarkdownString(
-            `${response.suggestion}\n\n**Why?** ${response.explanation}\n\n${
+            `${response.suggestion}\n\n**Why?** ${response.explanation}${diffText}\n\n${
                 response.documentationLink ? `[Learn More](${response.documentationLink})` : ''
             }\n\nWas this helpful? [Yes](command:ai-coding-tutor.feedback?${encodeURIComponent(
                 JSON.stringify({ response: response.suggestion, helpful: true })
@@ -283,7 +322,9 @@ async function fetchSuggestionFromBackend(code: string, proficiency: string): Pr
         const data = await response.json() as QueryResponse;
         return {
             suggestion: data.response,
-            explanation: `This suggestion is tailored for ${proficiency} level coding.`
+            explanation: `This suggestion is tailored for ${proficiency} level coding.`,
+            diff: `+ ${data.response}\n- ${code}`, // Simplified diff example
+            documentationLink: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript' // Example link
         };
     } catch (error) {
         console.error(`fetchSuggestionFromBackend error: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -291,7 +332,7 @@ async function fetchSuggestionFromBackend(code: string, proficiency: string): Pr
     }
 }
 
-async function fetchFullCodeSuggestions(code: string, proficiency: string): Promise<{ line: number; message: string; explanation: string }[]> {
+async function fetchFullCodeSuggestions(code: string, proficiency: string): Promise<{ line: number; message: string; explanation: string; diff?: string }[]> {
     const url = `${getBackendUrl()}/api/v1/analyze`;
     try {
         const response = await fetch(url, {
@@ -306,7 +347,8 @@ async function fetchFullCodeSuggestions(code: string, proficiency: string): Prom
         return data.suggestions.map(s => ({
             line: s.line,
             message: s.message,
-            explanation: s.explanation || 'No additional explanation provided.'
+            explanation: s.explanation || 'No additional explanation provided.',
+            diff: s.diff || undefined
         }));
     } catch (error) {
         console.error(`fetchFullCodeSuggestions error: ${error instanceof Error ? error.message : 'Unknown error'}`);

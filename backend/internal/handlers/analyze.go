@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
@@ -69,6 +70,7 @@ func AnalyzeHandler(aiService *services.AIService, dbService *services.DBService
 	}
 }
 
+/*
 func parseAnalyzeResponse(response string) []map[string]interface{} {
 	var suggestions []map[string]interface{}
 	lines := strings.Split(response, "\n")
@@ -84,8 +86,8 @@ func parseAnalyzeResponse(response string) []map[string]interface{} {
 	}
 	return suggestions
 }
+*/
 
-/*
 // parseAnalyzeResponse parses the AI response into a list of suggestions with line numbers
 func parseAnalyzeResponse(response string) []map[string]interface{} {
 	var suggestions []map[string]interface{}
@@ -107,4 +109,3 @@ func parseAnalyzeResponse(response string) []map[string]interface{} {
 	}
 	return suggestions
 }
-*/
