@@ -19,7 +19,7 @@ import (
 	"golang.org/x/oauth2/google"
 )
 
-var encryptionKey string = os.Getenv("ENCRYPTION_KEY")
+var EncryptionKey string = os.Getenv("ENCRYPTION_KEY")
 
 func validatePassword(password string) error {
 	if len(password) < 8 {
@@ -115,7 +115,7 @@ func LoginHandler(dbService *services.DBService) gin.HandlerFunc {
 		})
 
 		// Sign the token with your secret key
-		tokenString, err := token.SignedString([]byte(encryptionKey))
+		tokenString, err := token.SignedString([]byte(EncryptionKey))
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to generate token"})
 			return
@@ -264,7 +264,7 @@ func VerifyTokenHandler() gin.HandlerFunc {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
-			return []byte(encryptionKey), nil
+			return []byte(EncryptionKey), nil
 		})
 		fmt.Printf("VerifyTokenHandler: token=%v\n", token)
 
@@ -279,5 +279,59 @@ func VerifyTokenHandler() gin.HandlerFunc {
 		}
 
 		c.JSON(200, gin.H{"status": "valid"})
+	}
+}
+
+// ProfileResponse defines the structure for profile responses
+type ProfileResponse struct {
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
+	Email     string `json:"email"`
+	Username  string `json:"username"`
+	Role      string `json:"role"`
+	CreatedAt string `json:"createdAt"`
+}
+
+// ProfileHandler godoc
+// @Summary Get user profile
+// @Description Get the authenticated user's profile information
+// @Tags authentication
+// @Security ApiKeyAuth
+// @Produce json
+// @Success 200 {object} ProfileResponse
+// @Failure 401 {object} map[string]string "Example: {'error': 'Unauthorized'}"
+// @Failure 500 {object} map[string]string "Example: {'error': 'Internal server error'}"
+// @Router /profile [get]
+func ProfileHandler(dbService *services.DBService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get username from JWT token
+		username, exists := c.Get("username")
+		if !exists {
+			c.JSON(401, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		// Get user profile from database service
+		user, err := dbService.GetUserProfile(username.(string))
+		if err != nil {
+			if err.Error() == "user not found" {
+				c.JSON(404, gin.H{"error": "User not found"})
+				return
+			}
+			c.JSON(500, gin.H{"error": "Internal server error"})
+			return
+		}
+
+		// Convert to response format
+		response := ProfileResponse{
+			FirstName: user.FirstName,
+			LastName:  user.LastName,
+			Email:     user.Email,
+			Username:  user.Username,
+			Role:      user.Role,
+			CreatedAt: user.CreatedAt.Format(time.RFC3339),
+		}
+
+		c.JSON(200, response)
 	}
 }

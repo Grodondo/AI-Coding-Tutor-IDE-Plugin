@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/models"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
@@ -21,17 +20,17 @@ type ServiceConfig struct {
 	// config for this service
 	// required: true
 	Config struct {
-		 // which AI provider to use
-		 // required: true
-		 AIProvider string `json:"ai_provider"`
-		 // model identifier
-		 // required: true
-		 AIModel string `json:"ai_model"`
-		 // raw API key; server will encrypt this
-		 // required: true
-		 APIKey string `json:"api_key"`
-		 // named prompts
-		 Prompts map[string]string `json:"prompts"`
+		// which AI provider to use
+		// required: true
+		AIProvider string `json:"ai_provider"`
+		// model identifier
+		// required: true
+		AIModel string `json:"ai_model"`
+		// raw API key; server will encrypt this
+		// required: true
+		APIKey string `json:"api_key"`
+		// named prompts
+		Prompts map[string]string `json:"prompts"`
 	} `json:"config"`
 }
 
@@ -87,9 +86,7 @@ func UpdateSettingsHandler(dbService *services.DBService, settingsService *servi
 			return
 		}
 
-		// Get encryption key from environment
-		encryptionKey := os.Getenv("ENCRYPTION_KEY")
-		if encryptionKey == "" {
+		if EncryptionKey == "" {
 			c.JSON(500, gin.H{"error": "Encryption key not set"})
 			return
 		}
@@ -107,7 +104,7 @@ func UpdateSettingsHandler(dbService *services.DBService, settingsService *servi
 			c.JSON(400, gin.H{"error": "API key is missing or invalid"})
 			return
 		}
-		encryptedApiKey, err := utils.Encrypt(apiKey, encryptionKey)
+		encryptedApiKey, err := utils.Encrypt(apiKey, EncryptionKey)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to encrypt API key"})
 			return

@@ -3,6 +3,7 @@ package services
 import (
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/models"
 	_ "github.com/lib/pq" // PostgreSQL driver
@@ -16,6 +17,7 @@ type User struct {
 	Username     string
 	PasswordHash string
 	Role         string
+	CreatedAt    time.Time
 }
 
 // DBService holds the database connection
@@ -141,4 +143,30 @@ func (s *DBService) UpdateFeedback(id, feedback string) error {
 	fmt.Printf("UpdateFeedback: id=%s, feedback=%s\n", id, feedback)
 	_, err := s.db.Exec("UPDATE queries SET feedback = $1 WHERE id = $2", feedback, id)
 	return err
+}
+
+// GetUserProfile retrieves the user's profile information
+func (s *DBService) GetUserProfile(username string) (*User, error) {
+	var user User
+	err := s.db.QueryRow(`
+		SELECT first_name, last_name, email, username, role, created_at
+		FROM users
+		WHERE username = $1
+	`, username).Scan(
+		&user.FirstName,
+		&user.LastName,
+		&user.Email,
+		&user.Username,
+		&user.Role,
+		&user.CreatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("user not found")
+		}
+		return nil, fmt.Errorf("failed to get user profile: %v", err)
+	}
+
+	return &user, nil
 }

@@ -6,6 +6,7 @@ import (
 
 	_ "github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/docs"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/handlers"
+	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/middleware"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -86,6 +87,9 @@ func main() {
 	router.POST("api/v1/feedback", handlers.FeedbackHandler(dbService))
 	router.POST("api/v1/login", handlers.LoginHandler(dbService))
 	router.POST("api/v1/register", handlers.RegisterHandler(dbService))
+
+	// Profile route with authentication middleware
+	router.GET("api/v1/profile", middleware.AuthMiddleware(), handlers.ProfileHandler(dbService))
 
 	// Social auth routes
 	/*
