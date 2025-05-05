@@ -79,17 +79,15 @@ func main() {
 
 	// Api routes
 	router.GET("api/v1/verify-token", handlers.VerifyTokenHandler())
-	router.GET("api/v1/settings", handlers.GetSettingsHandler(dbService, settingsService))
-	router.POST("api/v1/settings", handlers.UpdateSettingsHandler(dbService, settingsService))
-	router.DELETE("api/v1/settings/:service", handlers.DeleteSettingsHandler(dbService, settingsService))
+	router.GET("api/v1/settings", middleware.AuthMiddleware(), handlers.GetSettingsHandler(dbService, settingsService))
+	router.POST("api/v1/settings", middleware.AuthMiddleware(), handlers.UpdateSettingsHandler(dbService, settingsService))
+	router.DELETE("api/v1/settings/:service", middleware.AuthMiddleware(), handlers.DeleteSettingsHandler(dbService, settingsService))
+	router.GET("api/v1/profile", middleware.AuthMiddleware(), handlers.ProfileHandler(dbService))
 	router.POST("api/v1/query", handlers.QueryHandler(aiService, dbService, settingsService))
 	router.POST("api/v1/analyze", handlers.AnalyzeHandler(aiService, dbService, settingsService))
 	router.POST("api/v1/feedback", handlers.FeedbackHandler(dbService))
 	router.POST("api/v1/login", handlers.LoginHandler(dbService))
 	router.POST("api/v1/register", handlers.RegisterHandler(dbService))
-
-	// Profile route with authentication middleware
-	router.GET("api/v1/profile", middleware.AuthMiddleware(), handlers.ProfileHandler(dbService))
 
 	// Social auth routes
 	/*
