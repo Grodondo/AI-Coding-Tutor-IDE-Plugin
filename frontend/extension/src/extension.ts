@@ -89,6 +89,21 @@ const errorHighlightDecorationType = vscode.window.createTextEditorDecorationTyp
     borderRadius: '3px'
 });
 
+// Custom decoration types for highlighting suggested code
+const suggestedCodeDecorationType = vscode.window.createTextEditorDecorationType({
+    backgroundColor: new vscode.ThemeColor('editorUnnecessaryCode.opacity'),
+    border: '1px dashed ' + new vscode.ThemeColor('editorInfo.foreground'),
+    borderRadius: '3px',
+    overviewRulerColor: new vscode.ThemeColor('editorInfo.foreground'),
+    overviewRulerLane: vscode.OverviewRulerLane.Right,
+    light: {
+        backgroundColor: 'rgba(0, 120, 215, 0.1)',
+    },
+    dark: {
+        backgroundColor: 'rgba(14, 99, 156, 0.2)',
+    },
+});
+
 // Helper to read .augmentignore file
 function readAugmentIgnore(workspacePath: string): string[] {
     const ignorePath = path.join(workspacePath, '.augmentignore');
@@ -640,15 +655,7 @@ class SuggestionCodeLensProvider implements vscode.CodeLensProvider {
                     arguments: [suggestion.line, suggestion.diff]
                 }));
                 
-                // Add "Accept" button if the suggestion has a diff
-                if (suggestion.diff) {
-                    codeLenses.push(new vscode.CodeLens(range, {
-                        title: `$(check) Accept`,
-                        tooltip: "Apply this suggestion",
-                        command: 'ai-coding-tutor.applySuggestion',
-                        arguments: [suggestion.line, suggestion.diff]
-                    }));
-                }
+                // Remove the "Accept" button as requested
             }
         }
 
@@ -822,9 +829,28 @@ async function fetchFullCodeSuggestions(code: string, proficiency: string, sugge
                             const lineNumber = enhancedSuggestion.line;
                             const document = editor.document;
                             
+                            // Prioritize structural elements when choosing lines to suggest changes for
+                            let targetLine = lineNumber;
+                            const MAX_LOOK_AHEAD = 5; // Look ahead at most 5 lines
+                            
+                            for (let i = lineNumber; i < Math.min(lineNumber + MAX_LOOK_AHEAD, document.lineCount); i++) {
+                                if (isStructuralCodeLine(document, i)) {
+                                    targetLine = i;
+                                    break;
+                                }
+                            }
+                            
+                            // Update the line number if we found a better target
+                            if (targetLine !== lineNumber) {
+                                enhancedSuggestion.line = targetLine;
+                            }
+                            
+                            // Find next non-empty line to match its indentation
+                            const nextNonEmptyLine = findNextNonEmptyLine(document, targetLine);
+                            const baseIndent = document.lineAt(nextNonEmptyLine).firstNonWhitespaceCharacterIndex;
+                            
                             // Get the indented code block only
-                            const startLine = lineNumber;
-                            const baseIndent = document.lineAt(startLine).firstNonWhitespaceCharacterIndex;
+                            const startLine = targetLine;
                             let endLine = startLine;
                             
                             // Find the end of the indented block
@@ -847,7 +873,7 @@ async function fetchFullCodeSuggestions(code: string, proficiency: string, sugge
                             let contextCode = '';
                             for (let i = startLine; i <= endLine; i++) {
                                 const line = document.lineAt(i).text;
-                                if (i === lineNumber) {
+                                if (i === targetLine) {
                                     contextCode += `[CURRENT LINE] ${line}\n`;
                                 } else {
                                     contextCode += line + '\n';
@@ -1170,97 +1196,80 @@ function registerCommands(
                 edit.replace(document.uri, originalRange, newCode);
                 await vscode.workspace.applyEdit(edit);
                 
-                // Show buttons to accept or reject
-                vscode.window.showInformationMessage(
-                    'Preview of suggested changes. Would you like to keep them?',
-                    { modal: false },
-                    'Accept Changes', 'Reject Changes'
-                ).then(async selection => {
-                    if (selection === 'Reject Changes') {
+                // Highlight the changed code using the decoration
+                const highlightRange = new vscode.Range(
+                    new vscode.Position(startLine, 0),
+                    new vscode.Position(startLine + newCode.split('\n').length - 1, document.lineAt(startLine + newCode.split('\n').length - 1).text.length)
+                );
+                editor.setDecorations(suggestedCodeDecorationType, [{ range: highlightRange }]);
+                
+                // Create QuickPick for more visually appealing UI
+                const quickPick = vscode.window.createQuickPick<AcceptRejectItem>();
+                quickPick.title = 'AI Suggestion';
+                quickPick.placeholder = 'Review the suggested changes';
+                
+                // No need to reference a non-existent variable here
+                quickPick.items = [
+                    new AcceptRejectItem(
+                        '$(check) Accept Changes',
+                        'Apply the suggested changes',
+                        'accept',
+                        new vscode.ThemeIcon('check', new vscode.ThemeColor('terminal.ansiGreen'))
+                    ),
+                    new AcceptRejectItem(
+                        '$(x) Reject Changes',
+                        'Revert to original code',
+                        'reject',
+                        new vscode.ThemeIcon('close', new vscode.ThemeColor('terminal.ansiRed'))
+                    )
+                ];
+                
+                // Handle user selection
+                quickPick.onDidAccept(async () => {
+                    const selectedItem = quickPick.selectedItems[0] as AcceptRejectItem;
+                    quickPick.hide();
+                    
+                    if (selectedItem.action === 'reject') {
                         // Restore original code
                         const revertEdit = new vscode.WorkspaceEdit();
                         revertEdit.replace(document.uri, new vscode.Range(startLine, 0, startLine + newCode.split('\n').length, 0), originalCode);
                         await vscode.workspace.applyEdit(revertEdit);
-                    } else if (selection === 'Accept Changes') {
+                        
+                        // Clear decoration
+                        editor.setDecorations(suggestedCodeDecorationType, []);
+                    } else if (selectedItem.action === 'accept') {
                         // Send positive feedback
                         const queryId = state.suggestionQueryIds.get(lineNumber);
                         if (queryId) {
                             await sendFeedbackToBackend(queryId, true);
                             state.suggestionQueryIds.delete(lineNumber);
                         }
+                        
+                        // Clear decoration since it's now accepted
+                        editor.setDecorations(suggestedCodeDecorationType, []);
+                        
                         vscode.window.showInformationMessage('Changes applied successfully');
                     }
                 });
                 
+                // Handle dismissal (treat as rejection)
+                quickPick.onDidHide(async () => {
+                    if (!quickPick.selectedItems.length) {
+                        // No selection made, revert changes
+                        const revertEdit = new vscode.WorkspaceEdit();
+                        revertEdit.replace(document.uri, new vscode.Range(startLine, 0, startLine + newCode.split('\n').length, 0), originalCode);
+                        await vscode.workspace.applyEdit(revertEdit);
+                        
+                        // Clear decoration
+                        editor.setDecorations(suggestedCodeDecorationType, []);
+                    }
+                });
+                
+                quickPick.show();
+                
             } catch (error) {
                 vscode.window.showErrorMessage(
                     `Failed to preview suggestion: ${error instanceof Error ? error.message : 'Unknown error'}`
-                );
-            }
-        }),
-        
-        // Apply suggestion
-        vscode.commands.registerCommand('ai-coding-tutor.applySuggestion', async (lineNumber: number, diff: string) => {
-            if (!state.isActive || !vscode.window.activeTextEditor) return;
-            
-            const editor = vscode.window.activeTextEditor;
-            const document = editor.document;
-            
-            try {
-                // First, determine the code block to replace
-                const startLine = lineNumber;
-                const baseIndent = document.lineAt(startLine).firstNonWhitespaceCharacterIndex;
-                let endLine = startLine;
-                
-                // Find the end of the indented block
-                for (let i = startLine + 1; i < document.lineCount; i++) {
-                    const line = document.lineAt(i);
-                    if (line.text.trim() === '' || line.firstNonWhitespaceCharacterIndex <= baseIndent) {
-                        // If empty line or outdented, we've reached the end of the block
-                        // But check if the next line is more indented, in which case continue
-                        if (i + 1 < document.lineCount) {
-                            const nextLine = document.lineAt(i + 1);
-                            if (nextLine.firstNonWhitespaceCharacterIndex > baseIndent) {
-                                continue; // Include this line as it's part of the block
-                            }
-                        }
-                        break;
-                    }
-                    endLine = i;
-                }
-                
-                // Extract the new code from the diff
-                let newCode = '';
-                if (diff && diff.includes('+')) {
-                    const lines = diff.split('\n');
-                    const addedLines = lines.filter(line => line.startsWith('+') && !line.startsWith('+++'));
-                    newCode = addedLines.map(line => line.substring(1)).join('\n');
-                } else if (diff) {
-                    // If diff format is not recognized, use the whole diff as new code
-                    newCode = diff;
-                }
-                
-                if (!newCode) {
-                    vscode.window.showWarningMessage('No suggested code found in the diff');
-                    return;
-                }
-                
-                // Apply the edit to the indented block
-                const edit = new vscode.WorkspaceEdit();
-                edit.replace(document.uri, new vscode.Range(startLine, 0, endLine + 1, 0), newCode);
-                await vscode.workspace.applyEdit(edit);
-                
-                // Send feedback that the suggestion was accepted
-                const queryId = state.suggestionQueryIds.get(lineNumber);
-                if (queryId) {
-                    await sendFeedbackToBackend(queryId, true);
-                    state.suggestionQueryIds.delete(lineNumber);
-                }
-                
-                vscode.window.showInformationMessage('Code suggestion applied successfully');
-            } catch (error) {
-                vscode.window.showErrorMessage(
-                    `Failed to apply suggestion: ${error instanceof Error ? error.message : 'Unknown error'}`
                 );
             }
         }),
@@ -1551,6 +1560,7 @@ function clearAllDecorations() {
         clearDecorations(editor, aiResponseDecorationType);
         clearDecorations(editor, inlineSuggestionDecorationType);
         clearDecorations(editor, errorHighlightDecorationType);
+        clearDecorations(editor, suggestedCodeDecorationType);
     }
 }
 
@@ -1844,4 +1854,48 @@ async function showCodeChangeSuggestions(editor: vscode.TextEditor, changes: Cod
             editor.setDecorations(decoration, []);
         });
     }
+}
+
+// Function to determine if a line contains structural code elements
+function isStructuralCodeLine(document: vscode.TextDocument, lineIndex: number): boolean {
+    if (lineIndex < 0 || lineIndex >= document.lineCount) return false;
+    
+    const line = document.lineAt(lineIndex).text.trim();
+    
+    // Check for class, function, method, loop, or if statement declarations
+    // This is a simplified check - in a real implementation you'd use language-specific parsing
+    return (
+        line.startsWith('class ') || 
+        line.startsWith('def ') || 
+        line.startsWith('function ') || 
+        line.startsWith('for ') || 
+        line.startsWith('while ') || 
+        line.startsWith('if ') || 
+        line.includes(' class ') || 
+        line.includes(' function ') || 
+        line.includes(' = function') || 
+        line.includes('struct ') || 
+        line.includes(' interface ') ||
+        line.includes(' enum ')
+    );
+}
+
+// Function to find the next non-empty line after a given line
+function findNextNonEmptyLine(document: vscode.TextDocument, startLine: number): number {
+    for (let i = startLine + 1; i < document.lineCount; i++) {
+        if (document.lineAt(i).text.trim() !== '') {
+            return i;
+        }
+    }
+    return startLine; // Return the start line if no non-empty lines are found
+}
+
+// Create more appealing quick pick items for accept/reject choices
+class AcceptRejectItem implements vscode.QuickPickItem {
+    constructor(
+        public label: string,
+        public description: string,
+        public action: 'accept' | 'reject',
+        public iconPath?: { light: vscode.Uri; dark: vscode.Uri } | vscode.ThemeIcon
+    ) {}
 }
