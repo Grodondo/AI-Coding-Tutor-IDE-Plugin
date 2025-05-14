@@ -279,6 +279,7 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
         webviewView.webview.onDidReceiveMessage(async (data) => {
             if (data.type === 'sendQuestion') {
                 // Handle sending a new question from the webview
+                // Call directly with the input value to skip the input box
                 vscode.commands.executeCommand('ai-coding-tutor.askQuery', data.value);
             }
         });
@@ -726,6 +727,12 @@ async function fetchFullCodeSuggestions(code: string, proficiency: string): Prom
         
         const data = await response.json() as AnalysisResponse;
         
+        // Handle case where suggestions might be null
+        if (!data.suggestions) {
+            console.warn('Received null suggestions from backend');
+            return [];
+        }
+        
         return data.suggestions.map(s => ({
             line: s.line,
             message: s.message,
@@ -832,24 +839,37 @@ function registerCommands(
         }),
         
         // Ask AI a question
-        vscode.commands.registerCommand('ai-coding-tutor.askQuery', async () => {
+        vscode.commands.registerCommand('ai-coding-tutor.askQuery', async (queryText?: string) => {
             if (!state.isActive) {
                 vscode.window.showWarningMessage('AI Coding Tutor is currently disabled. Enable it first.');
                 return;
             }
             
-            const query = await vscode.window.showInputBox({ 
-                prompt: 'Enter your coding question',
-                placeHolder: 'E.g., How do I optimize this function?'
-            });
+            let query = queryText;
+            if (!query) {
+                query = await vscode.window.showInputBox({ 
+                    prompt: 'Enter your coding question',
+                    placeHolder: 'E.g., How do I optimize this function?'
+                });
+            }
             
             if (!query) return;
             
-            // Get current selection if any
+            // Always get current file context
             let codeContext = '';
             const editor = vscode.window.activeTextEditor;
-            if (editor && !editor.selection.isEmpty) {
-                codeContext = editor.document.getText(editor.selection);
+            
+            if (editor) {
+                // If there's a selection, use that as context
+                if (!editor.selection.isEmpty) {
+                    codeContext = editor.document.getText(editor.selection);
+                } 
+                // Otherwise use the entire file (up to a reasonable size)
+                else {
+                    const fullText = editor.document.getText();
+                    // Limit to 10,000 characters to avoid huge payloads
+                    codeContext = fullText.length <= 10000 ? fullText : fullText.substring(0, 10000) + '\n\n[File truncated due to size...]';
+                }
             }
             
             // Add to chat view
@@ -871,7 +891,9 @@ function registerCommands(
                 progress.report({ message: "Processing your question..." });
                 
                 try {
-                    const fullQuery = codeContext ? `${query}\n\nCode context:\n${codeContext}` : query;
+                    // Include file name and language in the context
+                    const fileInfo = editor ? `\nFile: ${path.basename(editor.document.uri.fsPath)}\nLanguage: ${editor.document.languageId}` : '';
+                    const fullQuery = codeContext ? `${query}\n\nCode context:${fileInfo}\n${codeContext}` : query;
                     const { id, response } = await fetchQueryResponse(fullQuery, state.proficiency);
                     
                     // Add to chat history
@@ -1017,7 +1039,9 @@ function registerCommands(
                 // Analyze code
                 try {
                     const fullText = document.getText();
+                    console.log("Sending code for analysis:", fullText.length, "characters");
                     const suggestions = await fetchFullCodeSuggestions(fullText, state.proficiency);
+                    console.log("Received suggestions:", suggestions);
                     
                     state.suggestionProvider.updateSuggestions(suggestions);
                     state.codeLensEmitter.fire();
@@ -1030,6 +1054,7 @@ function registerCommands(
                         );
                     }
                 } catch (error) {
+                    console.error("Analysis error:", error);
                     vscode.window.showErrorMessage(
                         `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
                     );
