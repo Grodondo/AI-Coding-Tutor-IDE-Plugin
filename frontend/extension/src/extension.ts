@@ -152,7 +152,8 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Create status bar item
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    context.subscriptions.push(statusBarItem);
+    const connectionStatusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+    context.subscriptions.push(statusBarItem, connectionStatusItem);
     
     function updateStatusBarItem() {
         if (isActive) {
@@ -165,6 +166,43 @@ export function activate(context: vscode.ExtensionContext) {
             statusBarItem.show();
         }
     }
+    
+    // Check connection to backend
+    async function checkBackendConnection() {
+        try {
+            const url = `${getBackendUrl()}/health`;
+            const response = await fetch(url, { 
+                method: 'GET',
+                timeout: 3000
+            });
+            
+            if (response.ok) {
+                connectionStatusItem.text = '$(plug) Connected';
+                connectionStatusItem.tooltip = 'Connected to AI Coding Tutor backend';
+                connectionStatusItem.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
+                connectionStatusItem.show();
+                return true;
+            } else {
+                throw new Error(`Status: ${response.status}`);
+            }
+        } catch (error) {
+            connectionStatusItem.text = '$(warning) Disconnected';
+            connectionStatusItem.tooltip = `Cannot connect to backend: ${error instanceof Error ? error.message : 'Unknown error'}`;
+            connectionStatusItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+            connectionStatusItem.show();
+            return false;
+        }
+    }
+    
+    // Check connection initially and periodically
+    checkBackendConnection();
+    const connectionCheckInterval = setInterval(() => {
+        if (isActive) {
+            checkBackendConnection();
+        }
+    }, 30000); // Check every 30 seconds
+    
+    context.subscriptions.push({ dispose: () => clearInterval(connectionCheckInterval) });
     
     updateStatusBarItem();
     
@@ -211,25 +249,6 @@ export function activate(context: vscode.ExtensionContext) {
         });
         context.globalState.update('ai-coding-tutor.hasShownWelcome', true);
     }
-}
-
-async function indexWorkspace(workspacePath: string, exclusions: string[]): Promise<string[]> {
-    const files: string[] = [];
-    const walker = async (dir: string) => {
-        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
-        for (const entry of entries) {
-            const fullPath = path.join(dir, entry.name);
-            const relPath = path.relative(workspacePath, fullPath);
-            if (exclusions.some(ex => relPath.startsWith(ex))) continue;
-            if (entry.isDirectory()) {
-                await walker(fullPath);
-            } else {
-                files.push(fullPath);
-            }
-        }
-    };
-    await walker(workspacePath);
-    return files;
 }
 
 // Chat View Provider for the Ask Questions panel
@@ -640,44 +659,25 @@ function createResponseDecoration(lineNumber: number, response: SuggestionRespon
     };
 }
 
-// Index workspace files
-async function indexWorkspace(workspacePath: string, exclusions: string[]): Promise<string[]> {
-    const files: string[] = [];
-    const walker = async (dir: string) => {
-        try {
-            const entries = await fs.promises.readdir(dir, { withFileTypes: true });
-            for (const entry of entries) {
-                const fullPath = path.join(dir, entry.name);
-                const relPath = path.relative(workspacePath, fullPath);
-                
-                if (exclusions.some(ex => relPath.startsWith(ex))) continue;
-                if (entry.isDirectory()) {
-                    await walker(fullPath);
-                } else {
-                    files.push(fullPath);
-                }
-            }
-        } catch (error) {
-            console.error(`Error indexing ${dir}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-    };
-    
-    await walker(workspacePath);
-    return files;
-}
-
 // API interaction functions
 async function fetchSuggestionFromBackend(code: string, proficiency: string): Promise<SuggestionResponse> {
     const url = `${getBackendUrl()}/api/v1/query`;
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: code, level: proficiency })
+            body: JSON.stringify({ query: code, level: proficiency }),
+            signal: controller.signal
         });
         
+        clearTimeout(timeoutId);
+        
         if (!response.ok) {
-            throw new Error(`Backend error: ${response.statusText}`);
+            const errorText = await response.text().catch(() => 'Unknown error');
+            throw new Error(`Backend error ${response.status}: ${errorText}`);
         }
         
         const data = await response.json() as QueryResponse;
@@ -690,6 +690,23 @@ async function fetchSuggestionFromBackend(code: string, proficiency: string): Pr
         };
     } catch (error) {
         console.error(`fetchSuggestionFromBackend error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        
+        // Add user-friendly error handling
+        if (error instanceof Error && error.name === 'AbortError') {
+            throw new Error('Request timed out. The backend service may be overloaded or unavailable.');
+        }
+        
+        // Error handling without circular reference
+        try {
+            const testUrl = `${getBackendUrl()}/health`;
+            const testResponse = await fetch(testUrl, { timeout: 3000 });
+            if (!testResponse.ok) {
+                throw new Error('Backend service is not responding properly');
+            }
+        } catch (connectionError) {
+            throw new Error('Cannot connect to the AI Coding Tutor backend. Please check your connection and the backend URL in settings.');
+        }
+        
         throw error;
     }
 }
@@ -1168,6 +1185,54 @@ function registerCommands(
             );
             
             tutorialPanel.webview.html = getTutorialHtml();
+        }),
+        
+        // Save chat history as markdown
+        vscode.commands.registerCommand('ai-coding-tutor.exportChatHistory', async () => {
+            if (state.chatHistory.length === 0) {
+                vscode.window.showInformationMessage('No chat history to export');
+                return;
+            }
+            
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders) {
+                vscode.window.showErrorMessage('No workspace folder open');
+                return;
+            }
+            
+            try {
+                // Generate markdown content
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const filename = `ai-tutor-notes-${timestamp}.md`;
+                const filePath = path.join(workspaceFolders[0].uri.fsPath, filename);
+                
+                let markdownContent = `# AI Coding Tutor Study Notes\n\n`;
+                markdownContent += `Generated: ${new Date().toLocaleString()}\n\n`;
+                markdownContent += `Proficiency Level: ${state.proficiency}\n\n`;
+                markdownContent += `## Conversation History\n\n`;
+                
+                state.chatHistory.forEach((msg, index) => {
+                    const formattedTime = new Date(msg.timestamp).toLocaleString();
+                    const role = msg.role === 'user' ? '🧑‍💻 **User**' : '🤖 **AI Tutor**';
+                    markdownContent += `### ${index + 1}. ${role} (${formattedTime})\n\n${msg.content}\n\n`;
+                });
+                
+                // Write file
+                await fs.promises.writeFile(filePath, markdownContent, 'utf8');
+                
+                // Show success and open file
+                const openAction = 'Open File';
+                vscode.window.showInformationMessage(
+                    `Chat history exported to ${filename}`,
+                    openAction
+                ).then(selection => {
+                    if (selection === openAction) {
+                        vscode.commands.executeCommand('vscode.open', vscode.Uri.file(filePath));
+                    }
+                });
+            } catch (error: unknown) {
+                vscode.window.showErrorMessage(`Failed to export chat history: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
         })
     );
 }
@@ -1198,7 +1263,6 @@ function getTutorialHtml(): string {
             body {
                 font-family: var(--vscode-font-family);
                 padding: 20px;
-                color: var(--vscode-foreground);
             }
             h1, h2 {
                 color: var(--vscode-editor-foreground);
@@ -1291,6 +1355,32 @@ function getTutorialHtml(): string {
         <p>We hope this extension helps you learn and improve your coding skills.</p>
     </body>
     </html>`;
+}
+
+// Index workspace files
+async function indexWorkspace(workspacePath: string, exclusions: string[]): Promise<string[]> {
+    const files: string[] = [];
+    const walker = async (dir: string) => {
+        try {
+            const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+            for (const entry of entries) {
+                const fullPath = path.join(dir, entry.name);
+                const relPath = path.relative(workspacePath, fullPath);
+                
+                if (exclusions.some(ex => relPath.startsWith(ex))) continue;
+                if (entry.isDirectory()) {
+                    await walker(fullPath);
+                } else {
+                    files.push(fullPath);
+                }
+            }
+        } catch (error) {
+            console.error(`Error indexing ${dir}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    };
+    
+    await walker(workspacePath);
+    return files;
 }
 
 export function deactivate() {

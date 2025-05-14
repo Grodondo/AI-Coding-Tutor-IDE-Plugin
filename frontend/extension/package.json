@@ -34,7 +34,11 @@
         },
         "aiCodingTutor.proficiencyLevel": {
           "type": "string",
-          "enum": ["novice", "medium", "expert"],
+          "enum": [
+            "novice",
+            "medium",
+            "expert"
+          ],
           "default": "novice",
           "description": "Set your proficiency level for AI explanations"
         },
@@ -124,6 +128,11 @@
         "command": "ai-coding-tutor.clearSuggestions",
         "title": "AI Coding Tutor: Clear Suggestions",
         "icon": "$(clear-all)"
+      },
+      {
+        "command": "ai-coding-tutor.exportChatHistory",
+        "title": "AI Coding Tutor: Export Chat History",
+        "icon": "$(save-all)"
       }
     ],
     "menus": {
@@ -136,6 +145,11 @@
         {
           "command": "ai-coding-tutor.analyzeCode",
           "when": "view == aiTutorView",
+          "group": "navigation"
+        },
+        {
+          "command": "ai-coding-tutor.exportChatHistory",
+          "when": "view == aiTutorHistory",
           "group": "navigation"
         }
       ],
@@ -186,8 +200,9 @@
     "webpack-cli": "^6.0.1"
   },
   "dependencies": {
+    "@types/marked": "^5.0.2",
     "lodash": "^4.17.21",
-    "marked": "^12.0.0",
+    "marked": "^12.0.2",
     "node-fetch": "^2.7.0"
   }
 }

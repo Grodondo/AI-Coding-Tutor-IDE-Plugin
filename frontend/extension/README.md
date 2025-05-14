@@ -11,6 +11,8 @@ The AI Coding Tutor extension integrates an intelligent coding assistant directl
 - **Code Explanations**: Select any snippet and get it explained in detail
 - **Code Optimization**: Get suggestions to improve your code's performance and readability
 - **Progress Tracking**: View your interaction history and build your knowledge
+- **Export Chat History**: Save your learning sessions as Markdown notes for future reference
+- **Connection Status**: Visual indicator shows when you're connected to the backend service
 
 ## Learning Levels
 
@@ -69,6 +71,7 @@ Access these commands through the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P
 - `AI Coding Tutor: Explain Code` - Get explanation for selected code
 - `AI Coding Tutor: Optimize Code` - Get optimization suggestions for selected code
 - `AI Coding Tutor: Clear Suggestions` - Clear all current AI suggestions
+- `AI Coding Tutor: Export Chat History` - Save conversation as a Markdown file for your notes
 
 ## Extension Settings
 
