@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	_ "github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/docs"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/handlers"
@@ -78,6 +79,12 @@ func main() {
 	}))
 
 	// Api routes
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status": "ok",
+			"time":   time.Now().Format(time.RFC3339),
+		})
+	})
 	router.GET("api/v1/verify-token", handlers.VerifyTokenHandler())
 	router.GET("api/v1/settings", middleware.AuthMiddleware(), handlers.GetSettingsHandler(dbService, settingsService))
 	router.POST("api/v1/settings", middleware.AuthMiddleware(), handlers.UpdateSettingsHandler(dbService, settingsService))
