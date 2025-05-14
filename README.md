@@ -1,140 +1,141 @@
 # AI Coding Tutor IDE Plugin
 
-This project is a full-stack application designed to assist developers with an AI-powered coding tutor. It comprises:
+This project is a comprehensive AI-powered coding assistant designed to help developers at different skill levels. It consists of several integrated components:
 
-- **Backend**: A Go-based service handling API requests, AI interactions, and database operations, located in `backend/`.
-- **Frontend**: A React-based webpage using React Router v7 for user interface and settings management, located in `frontend/web/`.
-- **VS Code Extension**: A TypeScript-based extension integrating the AI tutor into VS Code, loacted in `frontend/extension/`.
-- **Database**: A PostgreSQL database for storing user data, settings, and queries, initialized via scripts in `initdb`.
+- **Backend**: A Go-based API service that handles AI interactions, user authentication, and database operations (`backend/` directory)
+- **Frontend Web Application**: A React-based web application for user settings and management (`frontend/webpage/` directory)
+- **VS Code Extension**: A TypeScript extension that integrates the AI tutor directly into VS Code (`frontend/extension/` directory)
+- **Database**: A PostgreSQL database for storing user data, queries, settings, and feedback information
 
-The AI Coding Tutor provides real-time code suggestions, code analysis, and query responses tailored to the user's proficiency level (novice, medium, expert), enhancing the coding experience within VS Code.
+## Key Features
+
+- Real-time code suggestions and analysis based on user's code
+- User-selectable proficiency levels (novice, medium, expert) for personalized assistance
+- Query-based interaction with AI for coding questions
+- Feedback mechanism to improve AI responses
+- Secure user authentication system
+- Configurable AI provider settings (supports Groq and OpenAI)
 
 ## Prerequisites
 
-Ensure the following tools are installed before setting up the project:
+Ensure you have the following installed before setting up the project:
 
-- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) for containerized deployment.
-- [Go](https://golang.org/doc/install) (version 1.24.2 or later) for backend development.
-- [Node.js](https://nodejs.org/en/download/) (version 18 or later) and [npm](https://www.npmjs.com/get-npm) for frontend and extension development.
-- [VS Code](https://code.visualstudio.com/) for testing the extension.
-- [PostgreSQL](https://www.postgresql.org/download/) (optional, if running the database locally without Docker).
-
-You'll also need API keys for AI services (e.g., Groq or OpenAI) to enable AI functionalities.
+- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) (for containerized deployment)
+- [Go](https://go.dev/doc/install) (version 1.21 or later) for backend development
+- [Node.js](https://nodejs.org/) (version 18 or later) and [npm](https://www.npmjs.com/get-npm) for frontend development
+- [VS Code](https://code.visualstudio.com/) for testing the extension
+- [PostgreSQL](https://www.postgresql.org/download/) (optional, if running the database locally)
 
 ## Installation and Setup
 
-Follow these steps to set up the project locally:
+### Step 1: Clone the repository
 
-1. **Clone the repository:**
+```bash
+git clone https://github.com/yourusername/AI-Coding-Tutor-IDE-Plugin.git
+cd AI-Coding-Tutor-IDE-Plugin
+```
 
-   ```bash
-   git clone https://github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin.git
-   cd AI-Coding-Tutor-IDE-Plugin/frontend
-   git clone https://github.com/Grodondo/AI-Coding-Tutor-Webpage.git web
-   ```
+### Step 2: Environment Configuration
 
-2. **Set up environment variables:**
+Create a `.env` file in the project root with the following environment variables:
 
-   Create a `.env` file in the `backend/` directory with the following:
+```env
+ENCRYPTION_KEY=your_32_character_encryption_key
+```
 
-   ```env
-   DB_HOST=db
-   DB_PORT=5432
-   DB_USER=user
-   DB_PASSWORD=password
-   DB_NAME=mydb
-   ENCRYPTION_KEY=your_secure_encryption_key
-   ```
+The `ENCRYPTION_KEY` is used for encrypting sensitive data like API keys and must be exactly 32 characters long.
 
-   Replace `your_secure_encryption_key` with a strong, unique key for data encryption that is **32 characters** long.
+### Step 3: Run with Docker Compose (Recommended)
 
-3. **Install backend dependencies:**
+The easiest way to run the complete backend and database:
 
-   Navigate to `backend/` and run:
+```bash
+docker-compose up --build
+```
 
-   ```bash
-   go mod download
-   ```
+This will:
+- Build and start the Go backend server on port 8080
+- Create and initialize a PostgreSQL database with required tables
+- Connect the services together with proper networking
 
-4. **Install frontend dependencies:**
+### Step 4: Frontend Web Application Setup
 
-   Navigate to `frontend/web/` and run:
+```bash
+cd frontend/webpage
+npm install
+npm run dev
+```
 
-   ```bash
-   npm install
-   ```
+The web application will be available at http://localhost:5173 or http://localhost:3000 (depending on your configuration).
 
-5. **Install VS Code extension dependencies:**
+### Step 5: VS Code Extension Setup
 
-   Navigate to `frontend/extension/` and run:
+To run the VS Code extension in development mode:
 
-   ```bash
-   npm install
-   ```
+```bash
+cd frontend/extension
+npm install
+code .
+```
 
-## Running the Application
+In VS Code:
+1. Press F5 to start debugging
+2. This will open a new VS Code window with the extension loaded
+3. You'll see an "AI Coding Tutor" view in the sidebar
+4. Use the commands from the Command Palette (Ctrl+Shift+P) with prefix "AI Coding Tutor:"
 
-### Docker Compose Setup for Backend and Database
+## Configuring the Extension
 
-Run the entire application (backend and database) with Docker Compose:
+After installing the extension, you can configure it through:
 
-1. From the project root, execute:
+1. VS Code settings (search for "AI Coding Tutor")
+2. The extension view in the sidebar
+3. The web application settings page
 
-   ```bash
-   docker-compose up --build
-   ```
+## API Documentation
 
-   This builds and starts the containers. The backend will be accessible at `http://localhost:8080`.
-
-2. To stop the application:
-
-   ```bash
-   docker-compose down
-   ```
-
-   If you want to remove the database volume as well, use:
-
-   ```bash
-   docker-compose down -v
-   ```
-
-### Running Components Separately
-
-3. **Run the frontend:**
-
-   In `frontend/web/`, run:
-
-   ```bash
-   npm run dev
-   ```
-
-   The webpage typically starts at `http://localhost:3000` or `http://localhost:5173` (check your setup).
-
-4. **Run the VS Code extension:**
-
-   - Open `extension/` in VS Code.
-   - Press `F5` to debug and launch the extension in a new VS Code window.
-
-## Accessing Documentation
-
-The backend API documentation is available via Swagger. With the backend running, visit:
+The backend API documentation is available via Swagger UI when the backend is running:
 
 ```
 http://localhost:8080/swagger/index.html
 ```
 
-This provides detailed information on API endpoints and usage.
+## Project Structure
 
-## Development Guidelines --> Not implemented yet.
+- `backend/`: Go-based API server
+  - `cmd/server/`: Main application entry point
+  - `internal/`: Core implementation
+    - `handlers/`: HTTP request handlers
+    - `middleware/`: Authentication and request processing
+    - `models/`: Data structures
+    - `services/`: Business logic
+    - `utils/`: Helper functions
+  - `docs/`: Swagger API documentation
+  - `config/`: Configuration management
 
-- **Backend**: Manage dependencies with Go modules. Run `go test ./...` for tests. 
-- **Frontend**: Use npm for dependency management. Run `npm test` for tests.
-- **Extension**: Use npm for dependencies. Run `npm test` for tests.
+- `frontend/`:
+  - `webpage/`: React-based web application
+    - `app/`: Application components and routes
+  - `extension/`: VS Code extension
+    - `src/`: TypeScript source code
 
-Keep documentation and tests updated when contributing.
+- `initdb/`: Database initialization scripts
 
 ## Troubleshooting
 
-- **Database connection issues**: Verify the database is running and `.env` settings match the database configuration.
-- **API key errors**: Ensure AI API keys are correctly configured in the `settings` table.
-- **CORS issues**: Check the allowed origins in the backend’s CORS configuration (`backend/main.go`).
+- **Database connection issues**: Verify the database container is running and environment variables are correctly set
+- **API key errors**: Ensure AI service API keys are properly configured in the settings
+- **CORS errors**: Check that the frontend origin is allowed in the backend CORS configuration
+
+## Security Notes
+
+- The application uses encrypted storage for API keys
+- Passwords are stored as bcrypt hashes, not plain text
+- JWT tokens are used for authentication between components
+
+## Development Guidelines
+
+- Follow Go standards and idiomatic practices for backend code
+- Use ESLint and TypeScript for frontend code quality
+- Write unit tests for critical functionality
+- Keep API documentation updated when adding new endpoints

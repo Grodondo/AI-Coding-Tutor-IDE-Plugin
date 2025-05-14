@@ -4,18 +4,9 @@ import { debounce } from 'lodash';
 import * as fs from 'fs';
 import * as path from 'path';
 import ignore from 'ignore';
+import { marked } from 'marked';
 
-// Decoration type for AI suggestions and loading states
-const aiResponseDecorationType = vscode.window.createTextEditorDecorationType({
-    after: {
-        color: new vscode.ThemeColor('editorHint.foreground'),
-        fontStyle: 'italic',
-        margin: '0 0 0 1em',
-        textDecoration: 'none; cursor: pointer;'
-    }
-});
-
-// Interfaces for backend responses and local cache
+// Type definitions for response data
 interface SuggestionResponse {
     suggestion: string;
     explanation: string;
@@ -32,166 +23,194 @@ interface QueryResponse {
     response: string;
 }
 
+interface ChatMessage {
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: number;
+}
+
 interface CachedIndex {
     files: string[];
     lastIndexed: number;
 }
 
-function getBackendUrl(): string {
+// Configuration helpers
+function getConfiguration<T>(key: string, defaultValue: T): T {
     const config = vscode.workspace.getConfiguration('aiCodingTutor');
-    return config.get('backendUrl', 'http://localhost:8080');
+    return config.get<T>(key, defaultValue);
 }
 
+function getBackendUrl(): string {
+    return getConfiguration<string>('backendUrl', 'http://localhost:8080');
+}
+
+function getProficiencyLevel(): string {
+    return getConfiguration<string>('proficiencyLevel', 'novice');
+}
+
+function isExtensionEnabled(): boolean {
+    return getConfiguration<boolean>('enable', true);
+}
+
+function shouldAutoAnalyze(): boolean {
+    return getConfiguration<boolean>('autoAnalyze', true);
+}
+
+function shouldShowInlineDecorations(): boolean {
+    return getConfiguration<boolean>('showInlineDecorations', true);
+}
+
+// Decoration types
+const aiResponseDecorationType = vscode.window.createTextEditorDecorationType({
+    after: {
+        color: new vscode.ThemeColor('editorHint.foreground'),
+        fontStyle: 'italic',
+        margin: '0 0 0 1em',
+        textDecoration: 'none; cursor: pointer;'
+    }
+});
+
+const inlineSuggestionDecorationType = vscode.window.createTextEditorDecorationType({
+    after: {
+        color: new vscode.ThemeColor('editorGhostText.foreground'),
+        fontStyle: 'italic',
+        margin: '0',
+        textDecoration: 'none'
+    },
+    rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
+});
+
+const errorHighlightDecorationType = vscode.window.createTextEditorDecorationType({
+    backgroundColor: new vscode.ThemeColor('editorError.background'),
+    borderColor: new vscode.ThemeColor('editorError.border'),
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderRadius: '3px'
+});
+
+// Helper to read .augmentignore file
 function readAugmentIgnore(workspacePath: string): string[] {
     const ignorePath = path.join(workspacePath, '.augmentignore');
     if (fs.existsSync(ignorePath)) {
         const ig = ignore().add(fs.readFileSync(ignorePath, 'utf8'));
-        return ig.createFilter() as any; // Simplified for demo; in practice, filter paths
+        return ig.createFilter() as any; // Simplified for demo
     }
     return [];
 }
 
+// Export activation function for VS Code
 export function activate(context: vscode.ExtensionContext) {
     console.log('AI Coding Tutor: Extension activated');
 
-    let isActive = true;
-    let proficiency = context.globalState.get('ai-coding-tutor.proficiency', 'novice');
-    const suggestionCache = new Map<number, SuggestionResponse>();
+    // State management
+    let isActive = context.globalState.get('ai-coding-tutor.isActive', true);
+    let proficiency = context.globalState.get('ai-coding-tutor.proficiency', getProficiencyLevel());
+    const suggestionCache = new Map<string, SuggestionResponse>();
     const indexCache = new Map<string, CachedIndex>();
-
+    const chatHistory: ChatMessage[] = context.globalState.get('ai-coding-tutor.chatHistory', []);
+    
+    // Providers and emitters
     const codeLensEmitter = new vscode.EventEmitter<void>();
     const suggestionProvider = new SuggestionCodeLensProvider(codeLensEmitter);
-
+    const chatViewProvider = new ChatViewProvider(context.extensionUri, chatHistory);
+    const treeDataProvider = new AiTutorTreeDataProvider(() => ({ isActive, proficiency }));
+    
+    // Register providers
     context.subscriptions.push(
         vscode.languages.registerCodeLensProvider({ scheme: 'file' }, suggestionProvider),
+        vscode.window.registerWebviewViewProvider('aiTutorChat', chatViewProvider),
+        vscode.window.registerTreeDataProvider('aiTutorView', treeDataProvider),
         vscode.window.onDidChangeTextEditorSelection(() => codeLensEmitter.fire())
     );
 
-    const treeDataProvider = new AiTutorTreeDataProvider(() => ({ isActive, proficiency }));
-    context.subscriptions.push(
-        vscode.window.registerTreeDataProvider('aiTutorView', treeDataProvider),
-        vscode.commands.registerCommand('ai-coding-tutor.selectLevel', async () => {
-            const level = await vscode.window.showQuickPick(['novice', 'medium', 'expert'], {
-                placeHolder: 'Select your proficiency level'
-            });
-            if (level) {
-                proficiency = level;
-                context.globalState.update('ai-coding-tutor.proficiency', level);
-                treeDataProvider.refresh();
-                vscode.window.showInformationMessage(`Proficiency set to ${level}`);
-                suggestionCache.clear();
-            }
-        }),
-        vscode.commands.registerCommand('ai-coding-tutor.toggleActivation', () => {
-            isActive = !isActive;
+    // Register commands
+    registerCommands(context, {
+        isActive,
+        setActive: (value) => { 
+            isActive = value;
+            context.globalState.update('ai-coding-tutor.isActive', value);
             treeDataProvider.refresh();
-            if (!isActive) {
-                suggestionProvider.updateSuggestions([]);
-                codeLensEmitter.fire();
-            }
-            vscode.window.showInformationMessage(`Extension ${isActive ? 'activated' : 'deactivated'}`);
-        }),
-        vscode.commands.registerCommand('ai-coding-tutor.askQuery', async () => {
-            const query = await vscode.window.showInputBox({ prompt: 'Enter your coding question' });
-            if (!query) return;
+            updateStatusBarItem();
+        },
+        proficiency,
+        setProficiency: (value) => {
+            proficiency = value;
+            context.globalState.update('ai-coding-tutor.proficiency', value);
+            treeDataProvider.refresh();
+            updateStatusBarItem();
+        },
+        suggestionCache,
+        suggestionProvider,
+        codeLensEmitter,
+        chatViewProvider,
+        indexCache,
+        chatHistory,
+        updateChatHistory: (messages) => {
+            context.globalState.update('ai-coding-tutor.chatHistory', messages);
+        }
+    });
 
-            const level = await vscode.window.showQuickPick(['novice', 'medium', 'expert'], {
-                placeHolder: 'Select your proficiency level'
-            });
-            if (!level) return;
-
-            try {
-                const { id, response } = await fetchQueryResponse(query, level);
-                const feedbackOptions = ['👍 Helpful', '👎 Not Helpful'];
-                const feedback = await vscode.window.showInformationMessage(
-                    `AI Response: ${response}`,
-                    ...feedbackOptions
-                );
-
-                if (feedback) {
-                    const isPositive = feedback === '👍 Helpful';
-                    await sendFeedbackToBackend(id, isPositive);
-                    vscode.window.showInformationMessage(`Feedback recorded: ${feedback}`);
-                }
-            } catch (error) {
-                vscode.window.showErrorMessage(`Query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            }
-        }),
-        vscode.commands.registerCommand('ai-coding-tutor.getSuggestion', async (lineNumber?: number) => {
-            if (!isActive || !vscode.window.activeTextEditor) return;
-            const editor = vscode.window.activeTextEditor;
-            const targetLine = lineNumber ?? editor.selection.active.line;
-            const lineText = editor.document.lineAt(targetLine).text.trim();
-
-            if (suggestionCache.has(targetLine)) {
-                const cached = suggestionCache.get(targetLine)!;
-                editor.setDecorations(aiResponseDecorationType, [createResponseDecoration(targetLine, cached)]);
-                return;
-            }
-
-            editor.setDecorations(aiResponseDecorationType, [createLoadingDecoration(targetLine)]);
-            try {
-                const response = await fetchSuggestionFromBackend(lineText, proficiency);
-                suggestionCache.set(targetLine, response);
-                const decoration = createResponseDecoration(targetLine, response);
-                editor.setDecorations(aiResponseDecorationType, [decoration]);
-            } catch (error) {
-                editor.setDecorations(aiResponseDecorationType, []);
-                vscode.window.showErrorMessage(`Failed to get suggestion: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            }
-        }),
-        vscode.commands.registerCommand('ai-coding-tutor.analyzeCode', async () => {
-            if (!isActive || !vscode.window.activeTextEditor) return;
-            const editor = vscode.window.activeTextEditor;
-            const document = editor.document;
-            const workspacePath = vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath;
-            if (!workspacePath) return;
-
-            const cached = indexCache.get(workspacePath);
-            const now = Date.now();
-            if (!cached || now - cached.lastIndexed > 3600000) { // Refresh every hour
-                const exclusions = readAugmentIgnore(workspacePath);
-                const files = await indexWorkspace(workspacePath, exclusions);
-                indexCache.set(workspacePath, { files, lastIndexed: now });
-            }
-
-            const fullText = document.getText();
-            try {
-                const suggestions = await fetchFullCodeSuggestions(fullText, proficiency);
-                suggestionProvider.updateSuggestions(suggestions);
-                codeLensEmitter.fire();
-            } catch (error) {
-                vscode.window.showErrorMessage(`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            }
-        })
-    );
-
+    // Create status bar item
+    const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    context.subscriptions.push(statusBarItem);
+    
+    function updateStatusBarItem() {
+        if (isActive) {
+            statusBarItem.text = `$(mortar-board) AI Tutor: ${proficiency}`;
+            statusBarItem.tooltip = `AI Coding Tutor is active (${proficiency} level)`;
+            statusBarItem.show();
+        } else {
+            statusBarItem.text = `$(circle-slash) AI Tutor`;
+            statusBarItem.tooltip = `AI Coding Tutor is inactive`;
+            statusBarItem.show();
+        }
+    }
+    
+    updateStatusBarItem();
+    
+    // Set up event handlers for auto-analysis
     const debouncedAnalysis = debounce(async (document: vscode.TextDocument) => {
-        if (!isActive || !vscode.window.activeTextEditor || vscode.window.activeTextEditor.document.uri.toString() !== document.uri.toString()) {
+        if (!isActive || !vscode.window.activeTextEditor || 
+            vscode.window.activeTextEditor.document.uri.toString() !== document.uri.toString() ||
+            !shouldAutoAnalyze()) {
             return;
         }
-        const fullText = document.getText();
+        
         try {
+            const fullText = document.getText();
             const suggestions = await fetchFullCodeSuggestions(fullText, proficiency);
             suggestionProvider.updateSuggestions(suggestions);
             codeLensEmitter.fire();
         } catch (error) {
-            vscode.window.showWarningMessage(`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            console.error(`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-    }, 5000);
-
+    }, 2000);
+    
     context.subscriptions.push(
         vscode.workspace.onDidSaveTextDocument((document) => {
-            if (isActive) {
+            if (isActive && shouldAutoAnalyze()) {
                 debouncedAnalysis(document);
             }
         }),
         vscode.window.onDidChangeActiveTextEditor(() => {
             suggestionProvider.updateSuggestions([]);
-            suggestionCache.clear();
             codeLensEmitter.fire();
         })
     );
+    
+    // Show welcome message on first activation
+    const hasShownWelcome = context.globalState.get('ai-coding-tutor.hasShownWelcome', false);
+    if (!hasShownWelcome) {
+        vscode.window.showInformationMessage(
+            'AI Coding Tutor is now active! Get personalized coding assistance with right-click or from the sidebar.',
+            'Show Tutorial'
+        ).then(selection => {
+            if (selection === 'Show Tutorial') {
+                vscode.commands.executeCommand('ai-coding-tutor.showTutorial');
+            }
+        });
+        context.globalState.update('ai-coding-tutor.hasShownWelcome', true);
+    }
 }
 
 async function indexWorkspace(workspacePath: string, exclusions: string[]): Promise<string[]> {
@@ -213,6 +232,283 @@ async function indexWorkspace(workspacePath: string, exclusions: string[]): Prom
     return files;
 }
 
+// Chat View Provider for the Ask Questions panel
+class ChatViewProvider implements vscode.WebviewViewProvider {
+    private _view?: vscode.WebviewView;
+    private _extensionUri: vscode.Uri;
+    private _messages: ChatMessage[];
+    
+    constructor(extensionUri: vscode.Uri, initialMessages: ChatMessage[]) {
+        this._extensionUri = extensionUri;
+        this._messages = initialMessages;
+    }
+    
+    resolveWebviewView(
+        webviewView: vscode.WebviewView,
+        context: vscode.WebviewViewResolveContext,
+        _token: vscode.CancellationToken
+    ) {
+        this._view = webviewView;
+        
+        webviewView.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [this._extensionUri]
+        };
+        
+        webviewView.webview.html = this._getHtmlForWebview();
+        
+        webviewView.webview.onDidReceiveMessage(async (data) => {
+            if (data.type === 'sendQuestion') {
+                // Handle sending a new question from the webview
+                vscode.commands.executeCommand('ai-coding-tutor.askQuery', data.value);
+            }
+        });
+        
+        // Update the webview with existing messages
+        this.update(this._messages);
+    }
+    
+    public update(messages: ChatMessage[]) {
+        this._messages = messages;
+        if (this._view) {
+            this._view.webview.postMessage({ 
+                type: 'updateMessages', 
+                value: messages 
+            });
+        }
+    }
+    
+    private _getHtmlForWebview() {
+        return `<!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>AI Coding Tutor Chat</title>
+            <style>
+                body {
+                    padding: 0;
+                    margin: 0;
+                    font-family: var(--vscode-font-family);
+                    color: var(--vscode-foreground);
+                }
+                .container {
+                    display: flex;
+                    flex-direction: column;
+                    height: 100vh;
+                    max-height: 100vh;
+                }
+                .chat-messages {
+                    flex: 1;
+                    overflow-y: auto;
+                    padding: 10px;
+                }
+                .message {
+                    margin-bottom: 15px;
+                    max-width: 85%;
+                }
+                .user-message {
+                    align-self: flex-end;
+                    margin-left: auto;
+                    background-color: var(--vscode-editor-infoBackground);
+                    border-radius: 10px 10px 0 10px;
+                    padding: 8px 12px;
+                }
+                .assistant-message {
+                    align-self: flex-start;
+                    background-color: var(--vscode-editor-background);
+                    border: 1px solid var(--vscode-panel-border);
+                    border-radius: 10px 10px 10px 0;
+                    padding: 8px 12px;
+                }
+                .message-content {
+                    white-space: pre-wrap;
+                    word-break: break-word;
+                }
+                .message-time {
+                    font-size: 0.8em;
+                    color: var(--vscode-descriptionForeground);
+                    margin-top: 4px;
+                    text-align: right;
+                }
+                .input-container {
+                    display: flex;
+                    padding: 10px;
+                    border-top: 1px solid var(--vscode-panel-border);
+                }
+                #questionInput {
+                    flex: 1;
+                    padding: 8px;
+                    border: 1px solid var(--vscode-input-border);
+                    background-color: var(--vscode-input-background);
+                    color: var(--vscode-input-foreground);
+                    border-radius: 4px;
+                    resize: none;
+                    min-height: 40px;
+                    max-height: 120px;
+                }
+                .send-button {
+                    margin-left: 8px;
+                    background-color: var(--vscode-button-background);
+                    color: var(--vscode-button-foreground);
+                    border: none;
+                    padding: 0 12px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                }
+                .send-button:hover {
+                    background-color: var(--vscode-button-hoverBackground);
+                }
+                .markdown-body {
+                    line-height: 1.5;
+                }
+                .markdown-body pre {
+                    background-color: var(--vscode-textCodeBlock-background);
+                    border-radius: 3px;
+                    padding: 8px;
+                    overflow-x: auto;
+                }
+                .markdown-body code {
+                    font-family: var(--vscode-editor-font-family);
+                    background-color: var(--vscode-textCodeBlock-background);
+                    padding: 2px 4px;
+                    border-radius: 3px;
+                }
+                .empty-state {
+                    text-align: center;
+                    margin-top: 50px;
+                    color: var(--vscode-descriptionForeground);
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div id="chatMessages" class="chat-messages">
+                    <div class="empty-state">
+                        <p>Ask the AI Coding Tutor a question about your code.</p>
+                        <p>Your conversation will appear here.</p>
+                    </div>
+                </div>
+                <div class="input-container">
+                    <textarea 
+                        id="questionInput" 
+                        placeholder="Ask a coding question..." 
+                        rows="1"
+                        autofocus
+                    ></textarea>
+                    <button id="sendButton" class="send-button">Send</button>
+                </div>
+            </div>
+            
+            <script>
+                (function() {
+                    // Get elements
+                    const vscode = acquireVsCodeApi();
+                    const chatMessages = document.getElementById('chatMessages');
+                    const questionInput = document.getElementById('questionInput');
+                    const sendButton = document.getElementById('sendButton');
+                    
+                    // Auto-resize textarea
+                    questionInput.addEventListener('input', function() {
+                        this.style.height = 'auto';
+                        this.style.height = Math.min(120, this.scrollHeight) + 'px';
+                    });
+                    
+                    // Send message
+                    function sendMessage() {
+                        const question = questionInput.value.trim();
+                        if (question) {
+                            vscode.postMessage({
+                                type: 'sendQuestion',
+                                value: question
+                            });
+                            questionInput.value = '';
+                            questionInput.style.height = 'auto';
+                        }
+                    }
+                    
+                    // Handle Enter key (with shift for new line)
+                    questionInput.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            sendMessage();
+                        }
+                    });
+                    
+                    // Handle send button click
+                    sendButton.addEventListener('click', sendMessage);
+                    
+                    // Format timestamp
+                    function formatTime(timestamp) {
+                        const date = new Date(timestamp);
+                        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    }
+                    
+                    // Render messages
+                    function renderMessages(messages) {
+                        // Clear chat messages
+                        chatMessages.innerHTML = '';
+                        
+                        if (messages.length === 0) {
+                            // Show empty state
+                            chatMessages.innerHTML = \`
+                                <div class="empty-state">
+                                    <p>Ask the AI Coding Tutor a question about your code.</p>
+                                    <p>Your conversation will appear here.</p>
+                                </div>
+                            \`;
+                            return;
+                        }
+                        
+                        // Add messages
+                        messages.forEach(msg => {
+                            const messageDiv = document.createElement('div');
+                            messageDiv.className = \`message \${msg.role === 'user' ? 'user-message' : 'assistant-message'}\`;
+                            
+                            const contentDiv = document.createElement('div');
+                            contentDiv.className = 'message-content markdown-body';
+                            
+                            // Format code blocks in assistant messages
+                            if (msg.role === 'assistant') {
+                                // Simple markdown-like parsing for code blocks
+                                let content = msg.content.replace(/\`\`\`([\\s\\S]*?)\`\`\`/g, '<pre><code>$1</code></pre>');
+                                // Inline code
+                                content = content.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
+                                contentDiv.innerHTML = content;
+                            } else {
+                                contentDiv.textContent = msg.content;
+                            }
+                            
+                            const timeDiv = document.createElement('div');
+                            timeDiv.className = 'message-time';
+                            timeDiv.textContent = formatTime(msg.timestamp);
+                            
+                            messageDiv.appendChild(contentDiv);
+                            messageDiv.appendChild(timeDiv);
+                            chatMessages.appendChild(messageDiv);
+                        });
+                        
+                        // Scroll to bottom
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                    }
+                    
+                    // Listen for messages
+                    window.addEventListener('message', event => {
+                        const message = event.data;
+                        switch (message.type) {
+                            case 'updateMessages':
+                                renderMessages(message.value);
+                                break;
+                        }
+                    });
+                })();
+            </script>
+        </body>
+        </html>`;
+    }
+}
+
+// Tree view provider for sidebar
 class AiTutorTreeDataProvider implements vscode.TreeDataProvider<AiTutorTreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<AiTutorTreeItem | undefined | null | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -233,14 +529,38 @@ class AiTutorTreeDataProvider implements vscode.TreeDataProvider<AiTutorTreeItem
     getChildren(element?: AiTutorTreeItem): AiTutorTreeItem[] {
         if (element) return [];
         const { isActive, proficiency } = this.getState();
+        
         return [
-            new AiTutorTreeItem(`Status: ${isActive ? 'Active' : 'Inactive'}`, 'ai-coding-tutor.toggleActivation', isActive ? 'check' : 'circle-slash'),
-            new AiTutorTreeItem(`Level: ${proficiency}`, 'ai-coding-tutor.selectLevel', 'gear'),
-            new AiTutorTreeItem('Analyze Code', 'ai-coding-tutor.analyzeCode', 'refresh')
+            new AiTutorTreeItem(
+                `Status: ${isActive ? 'Active' : 'Inactive'}`, 
+                'ai-coding-tutor.toggleActivation', 
+                isActive ? 'check' : 'circle-slash'
+            ),
+            new AiTutorTreeItem(
+                `Level: ${proficiency}`, 
+                'ai-coding-tutor.selectLevel', 
+                'mortar-board'
+            ),
+            new AiTutorTreeItem(
+                'Ask a Question', 
+                'ai-coding-tutor.askQuery', 
+                'comment-discussion'
+            ),
+            new AiTutorTreeItem(
+                'Analyze Current File', 
+                'ai-coding-tutor.analyzeCode', 
+                'microscope'
+            ),
+            new AiTutorTreeItem(
+                'Clear Suggestions', 
+                'ai-coding-tutor.clearSuggestions', 
+                'clear-all'
+            ),
         ];
     }
 }
 
+// Tree item for sidebar
 class AiTutorTreeItem extends vscode.TreeItem {
     constructor(label: string, commandId: string, icon?: string) {
         super(label, vscode.TreeItemCollapsibleState.None);
@@ -249,6 +569,7 @@ class AiTutorTreeItem extends vscode.TreeItem {
     }
 }
 
+// Code lens provider for suggestions
 class SuggestionCodeLensProvider implements vscode.CodeLensProvider {
     private suggestions: { line: number; message: string; explanation: string; diff?: string }[] = [];
 
@@ -263,13 +584,15 @@ class SuggestionCodeLensProvider implements vscode.CodeLensProvider {
     }
 
     provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
+        if (!isExtensionEnabled()) return [];
+        
         const editor = vscode.window.activeTextEditor;
         if (!editor || editor.document.uri.toString() !== document.uri.toString()) return [];
 
         return this.suggestions.map(({ line, message }) => {
             const range = document.lineAt(line).range;
             return new vscode.CodeLens(range, {
-                title: '$(lightbulb) Suggestion',
+                title: `$(lightbulb) AI Suggestion`,
                 tooltip: message,
                 command: 'ai-coding-tutor.getSuggestion',
                 arguments: [line]
@@ -278,26 +601,35 @@ class SuggestionCodeLensProvider implements vscode.CodeLensProvider {
     }
 }
 
+// Create loading decoration
 function createLoadingDecoration(lineNumber: number): vscode.DecorationOptions {
     return {
         range: new vscode.Range(lineNumber, 0, lineNumber, 0),
         renderOptions: {
-            after: { contentText: '$(sync~spin) Analyzing...', color: new vscode.ThemeColor('editorInfo.foreground') }
+            after: { 
+                contentText: '$(sync~spin) Analyzing...', 
+                color: new vscode.ThemeColor('editorInfo.foreground') 
+            }
         }
     };
 }
 
+// Create response decoration
 function createResponseDecoration(lineNumber: number, response: SuggestionResponse): vscode.DecorationOptions {
     const diffText = response.diff ? `\n\n**Diff Preview:**\n\`\`\`diff\n${response.diff}\n\`\`\`` : '';
+    
     return {
         range: new vscode.Range(lineNumber, 0, lineNumber, 0),
         renderOptions: {
             after: {
-                contentText: `$(lightbulb) ${response.suggestion}`
+                contentText: `$(lightbulb) ${response.suggestion}`,
+                color: new vscode.ThemeColor('editorInfo.foreground'),
+                fontStyle: 'italic',
+                margin: '0 0 0 1em'
             }
         },
         hoverMessage: new vscode.MarkdownString(
-            `${response.suggestion}\n\n**Why?** ${response.explanation}${diffText}\n\n${
+            `# AI Suggestion\n\n${response.suggestion}\n\n## Why?\n${response.explanation}${diffText}\n\n${
                 response.documentationLink ? `[Learn More](${response.documentationLink})` : ''
             }\n\nWas this helpful? [Yes](command:ai-coding-tutor.feedback?${encodeURIComponent(
                 JSON.stringify({ response: response.suggestion, helpful: true })
@@ -308,6 +640,33 @@ function createResponseDecoration(lineNumber: number, response: SuggestionRespon
     };
 }
 
+// Index workspace files
+async function indexWorkspace(workspacePath: string, exclusions: string[]): Promise<string[]> {
+    const files: string[] = [];
+    const walker = async (dir: string) => {
+        try {
+            const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+            for (const entry of entries) {
+                const fullPath = path.join(dir, entry.name);
+                const relPath = path.relative(workspacePath, fullPath);
+                
+                if (exclusions.some(ex => relPath.startsWith(ex))) continue;
+                if (entry.isDirectory()) {
+                    await walker(fullPath);
+                } else {
+                    files.push(fullPath);
+                }
+            }
+        } catch (error) {
+            console.error(`Error indexing ${dir}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    };
+    
+    await walker(workspacePath);
+    return files;
+}
+
+// API interaction functions
 async function fetchSuggestionFromBackend(code: string, proficiency: string): Promise<SuggestionResponse> {
     const url = `${getBackendUrl()}/api/v1/query`;
     try {
@@ -316,13 +675,16 @@ async function fetchSuggestionFromBackend(code: string, proficiency: string): Pr
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query: code, level: proficiency })
         });
+        
         if (!response.ok) {
             throw new Error(`Backend error: ${response.statusText}`);
         }
+        
         const data = await response.json() as QueryResponse;
+        
         return {
             suggestion: data.response,
-            explanation: `This suggestion is tailored for ${proficiency} level coding.`,
+            explanation: `This suggestion is tailored for ${proficiency} level understanding.`,
             diff: `+ ${data.response}\n- ${code}`, // Simplified diff example
             documentationLink: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript' // Example link
         };
@@ -340,10 +702,13 @@ async function fetchFullCodeSuggestions(code: string, proficiency: string): Prom
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ code, level: proficiency })
         });
+        
         if (!response.ok) {
             throw new Error(`Backend error: ${response.statusText}`);
         }
+        
         const data = await response.json() as AnalysisResponse;
+        
         return data.suggestions.map(s => ({
             line: s.line,
             message: s.message,
@@ -364,9 +729,11 @@ async function fetchQueryResponse(query: string, level: string): Promise<QueryRe
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query, level })
         });
+        
         if (!response.ok) {
             throw new Error(`Backend error: ${response.statusText}`);
         }
+        
         return response.json() as Promise<QueryResponse>;
     } catch (error) {
         console.error(`fetchQueryResponse error: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -382,6 +749,7 @@ async function sendFeedbackToBackend(queryId: string, isPositive: boolean): Prom
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ queryId, feedback: isPositive ? 'positive' : 'negative' })
         });
+        
         if (!response.ok) {
             throw new Error(`Backend error: ${response.statusText}`);
         }
@@ -391,4 +759,541 @@ async function sendFeedbackToBackend(queryId: string, isPositive: boolean): Prom
     }
 }
 
-export function deactivate() {}
+function registerCommands(
+    context: vscode.ExtensionContext, 
+    state: {
+        isActive: boolean;
+        setActive: (value: boolean) => void;
+        proficiency: string;
+        setProficiency: (value: string) => void;
+        suggestionCache: Map<string, SuggestionResponse>;
+        suggestionProvider: SuggestionCodeLensProvider;
+        codeLensEmitter: vscode.EventEmitter<void>;
+        chatViewProvider: ChatViewProvider;
+        indexCache: Map<string, CachedIndex>;
+        chatHistory: ChatMessage[];
+        updateChatHistory: (messages: ChatMessage[]) => void;
+    }
+) {
+    context.subscriptions.push(
+        // Toggle extension activation
+        vscode.commands.registerCommand('ai-coding-tutor.toggleActivation', () => {
+            state.setActive(!state.isActive);
+            vscode.window.showInformationMessage(
+                `AI Coding Tutor ${state.isActive ? 'activated' : 'deactivated'}`
+            );
+            
+            // Clear decorations when deactivated
+            if (!state.isActive) {
+                state.suggestionProvider.updateSuggestions([]);
+                state.codeLensEmitter.fire();
+                clearAllDecorations();
+            }
+        }),
+        
+        // Proficiency level selection
+        vscode.commands.registerCommand('ai-coding-tutor.selectLevel', async () => {
+            const options = [
+                { label: '$(mortar-board) Novice', description: 'Simple explanations for beginners', detail: 'Focus on basic concepts with simplified explanations' },
+                { label: '$(mortar-board) Medium', description: 'Balanced explanations for intermediate users', detail: 'More detailed information with some advanced concepts' },
+                { label: '$(mortar-board) Expert', description: 'In-depth technical explanations', detail: 'Comprehensive technical details for advanced users' }
+            ];
+            
+            const selection = await vscode.window.showQuickPick(options, {
+                placeHolder: 'Select your proficiency level',
+                title: 'AI Coding Tutor - Proficiency Level'
+            });
+            
+            if (selection) {
+                const level = selection.label.includes('Novice') ? 'novice' : 
+                              selection.label.includes('Medium') ? 'medium' : 'expert';
+                
+                state.setProficiency(level);
+                vscode.window.showInformationMessage(`Proficiency set to ${level}`);
+                state.suggestionCache.clear();
+            }
+        }),
+        
+        // Ask AI a question
+        vscode.commands.registerCommand('ai-coding-tutor.askQuery', async () => {
+            if (!state.isActive) {
+                vscode.window.showWarningMessage('AI Coding Tutor is currently disabled. Enable it first.');
+                return;
+            }
+            
+            const query = await vscode.window.showInputBox({ 
+                prompt: 'Enter your coding question',
+                placeHolder: 'E.g., How do I optimize this function?'
+            });
+            
+            if (!query) return;
+            
+            // Get current selection if any
+            let codeContext = '';
+            const editor = vscode.window.activeTextEditor;
+            if (editor && !editor.selection.isEmpty) {
+                codeContext = editor.document.getText(editor.selection);
+            }
+            
+            // Add to chat view
+            state.chatHistory.push({
+                role: 'user',
+                content: query + (codeContext ? `\n\n\`\`\`\n${codeContext}\n\`\`\`` : ''),
+                timestamp: Date.now()
+            });
+            
+            state.chatViewProvider.update(state.chatHistory);
+            state.updateChatHistory(state.chatHistory);
+            
+            // Show progress
+            vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: "AI Coding Tutor",
+                cancellable: false
+            }, async (progress) => {
+                progress.report({ message: "Processing your question..." });
+                
+                try {
+                    const fullQuery = codeContext ? `${query}\n\nCode context:\n${codeContext}` : query;
+                    const { id, response } = await fetchQueryResponse(fullQuery, state.proficiency);
+                    
+                    // Add to chat history
+                    state.chatHistory.push({
+                        role: 'assistant',
+                        content: response,
+                        timestamp: Date.now()
+                    });
+                    
+                    state.chatViewProvider.update(state.chatHistory);
+                    state.updateChatHistory(state.chatHistory);
+                    
+                    // Show feedback options
+                    const feedbackOptions = ['👍 Helpful', '👎 Not Helpful'];
+                    vscode.window.showInformationMessage(
+                        `AI Response received`,
+                        ...feedbackOptions
+                    ).then(async (feedback) => {
+                        if (feedback) {
+                            const isPositive = feedback === '👍 Helpful';
+                            await sendFeedbackToBackend(id, isPositive);
+                        }
+                    });
+                    
+                } catch (error) {
+                    vscode.window.showErrorMessage(
+                        `Query failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+                    );
+                    
+                    // Add error to chat
+                    state.chatHistory.push({
+                        role: 'assistant',
+                        content: `⚠️ Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                        timestamp: Date.now()
+                    });
+                    
+                    state.chatViewProvider.update(state.chatHistory);
+                    state.updateChatHistory(state.chatHistory);
+                }
+            });
+        }),
+        
+        // Get suggestion for current line
+        vscode.commands.registerCommand('ai-coding-tutor.getSuggestion', async (lineNumber?: number) => {
+            if (!state.isActive || !vscode.window.activeTextEditor) return;
+            
+            const editor = vscode.window.activeTextEditor;
+            const targetLine = lineNumber !== undefined ? lineNumber : editor.selection.active.line;
+            const lineText = editor.document.lineAt(targetLine).text.trim();
+            const filePath = editor.document.uri.fsPath;
+            const cacheKey = `${filePath}:${targetLine}:${lineText}`;
+            
+            // Clear other decorations first
+            clearDecorations(editor, aiResponseDecorationType);
+            
+            // Check cache
+            if (state.suggestionCache.has(cacheKey)) {
+                const cached = state.suggestionCache.get(cacheKey)!;
+                if (shouldShowInlineDecorations()) {
+                    editor.setDecorations(aiResponseDecorationType, [
+                        createResponseDecoration(targetLine, cached)
+                    ]);
+                }
+                return;
+            }
+            
+            // Show loading state
+            if (shouldShowInlineDecorations()) {
+                editor.setDecorations(aiResponseDecorationType, [
+                    createLoadingDecoration(targetLine)
+                ]);
+            }
+            
+            // Show progress
+            vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: "AI Coding Tutor",
+                cancellable: false
+            }, async (progress) => {
+                progress.report({ message: "Analyzing code..." });
+                
+                try {
+                    // Get surrounding code for context (5 lines before and after)
+                    const startLine = Math.max(0, targetLine - 5);
+                    const endLine = Math.min(editor.document.lineCount - 1, targetLine + 5);
+                    let contextLines = '';
+                    
+                    for (let i = startLine; i <= endLine; i++) {
+                        const line = editor.document.lineAt(i).text;
+                        contextLines += line + '\n';
+                    }
+                    
+                    const response = await fetchSuggestionFromBackend(contextLines, state.proficiency);
+                    state.suggestionCache.set(cacheKey, response);
+                    
+                    if (shouldShowInlineDecorations()) {
+                        editor.setDecorations(aiResponseDecorationType, [
+                            createResponseDecoration(targetLine, response)
+                        ]);
+                    }
+                    
+                } catch (error) {
+                    clearDecorations(editor, aiResponseDecorationType);
+                    vscode.window.showErrorMessage(
+                        `Failed to get suggestion: ${error instanceof Error ? error.message : 'Unknown error'}`
+                    );
+                }
+            });
+        }),
+        
+        // Analyze entire file
+        vscode.commands.registerCommand('ai-coding-tutor.analyzeCode', async () => {
+            if (!state.isActive || !vscode.window.activeTextEditor) return;
+            
+            const editor = vscode.window.activeTextEditor;
+            const document = editor.document;
+            const workspacePath = vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath;
+            
+            if (!workspacePath) {
+                vscode.window.showWarningMessage('Unable to analyze code: No workspace folder found');
+                return;
+            }
+            
+            // Show progress
+            vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: "AI Coding Tutor",
+                cancellable: false
+            }, async (progress) => {
+                progress.report({ message: "Analyzing code..." });
+                
+                // Index workspace if needed
+                const cached = state.indexCache.get(workspacePath);
+                const now = Date.now();
+                
+                if (!cached || now - cached.lastIndexed > 3600000) { // Refresh every hour
+                    progress.report({ message: "Indexing workspace..." });
+                    const exclusions = readAugmentIgnore(workspacePath);
+                    const files = await indexWorkspace(workspacePath, exclusions);
+                    state.indexCache.set(workspacePath, { files, lastIndexed: now });
+                }
+                
+                // Analyze code
+                try {
+                    const fullText = document.getText();
+                    const suggestions = await fetchFullCodeSuggestions(fullText, state.proficiency);
+                    
+                    state.suggestionProvider.updateSuggestions(suggestions);
+                    state.codeLensEmitter.fire();
+                    
+                    if (suggestions.length === 0) {
+                        vscode.window.showInformationMessage('No suggestions found for this code.');
+                    } else {
+                        vscode.window.showInformationMessage(
+                            `Found ${suggestions.length} suggestion${suggestions.length === 1 ? '' : 's'} for your code.`
+                        );
+                    }
+                } catch (error) {
+                    vscode.window.showErrorMessage(
+                        `Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+                    );
+                }
+            });
+        }),
+        
+        // Explain selected code
+        vscode.commands.registerCommand('ai-coding-tutor.explainCode', async () => {
+            if (!state.isActive || !vscode.window.activeTextEditor) return;
+            
+            const editor = vscode.window.activeTextEditor;
+            if (editor.selection.isEmpty) {
+                vscode.window.showInformationMessage('Please select code to explain');
+                return;
+            }
+            
+            const selectedCode = editor.document.getText(editor.selection);
+            const query = `Explain the following code:\n\n${selectedCode}`;
+            
+            // Add to chat view
+            state.chatHistory.push({
+                role: 'user',
+                content: query,
+                timestamp: Date.now()
+            });
+            
+            state.chatViewProvider.update(state.chatHistory);
+            state.updateChatHistory(state.chatHistory);
+            
+            // Open chat panel
+            vscode.commands.executeCommand('aiTutorChat.focus');
+            
+            // Show progress
+            vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: "AI Coding Tutor",
+                cancellable: false
+            }, async (progress) => {
+                progress.report({ message: "Analyzing code..." });
+                
+                try {
+                    const { id, response } = await fetchQueryResponse(query, state.proficiency);
+                    
+                    // Add to chat history
+                    state.chatHistory.push({
+                        role: 'assistant',
+                        content: response,
+                        timestamp: Date.now()
+                    });
+                    
+                    state.chatViewProvider.update(state.chatHistory);
+                    state.updateChatHistory(state.chatHistory);
+                    
+                } catch (error) {
+                    vscode.window.showErrorMessage(
+                        `Explanation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+                    );
+                    
+                    // Add error to chat
+                    state.chatHistory.push({
+                        role: 'assistant',
+                        content: `⚠️ Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                        timestamp: Date.now()
+                    });
+                    
+                    state.chatViewProvider.update(state.chatHistory);
+                    state.updateChatHistory(state.chatHistory);
+                }
+            });
+        }),
+        
+        // Optimize selected code
+        vscode.commands.registerCommand('ai-coding-tutor.optimizeCode', async () => {
+            if (!state.isActive || !vscode.window.activeTextEditor) return;
+            
+            const editor = vscode.window.activeTextEditor;
+            if (editor.selection.isEmpty) {
+                vscode.window.showInformationMessage('Please select code to optimize');
+                return;
+            }
+            
+            const selectedCode = editor.document.getText(editor.selection);
+            const query = `Optimize the following code for better performance (keep the same functionality):\n\n${selectedCode}`;
+            
+            // Add to chat view
+            state.chatHistory.push({
+                role: 'user',
+                content: query,
+                timestamp: Date.now()
+            });
+            
+            state.chatViewProvider.update(state.chatHistory);
+            state.updateChatHistory(state.chatHistory);
+            
+            // Open chat panel
+            vscode.commands.executeCommand('aiTutorChat.focus');
+            
+            // Show progress
+            vscode.window.withProgress({
+                location: vscode.ProgressLocation.Notification,
+                title: "AI Coding Tutor",
+                cancellable: false
+            }, async (progress) => {
+                progress.report({ message: "Optimizing code..." });
+                
+                try {
+                    const { id, response } = await fetchQueryResponse(query, state.proficiency);
+                    
+                    // Add to chat history
+                    state.chatHistory.push({
+                        role: 'assistant',
+                        content: response,
+                        timestamp: Date.now()
+                    });
+                    
+                    state.chatViewProvider.update(state.chatHistory);
+                    state.updateChatHistory(state.chatHistory);
+                    
+                } catch (error) {
+                    vscode.window.showErrorMessage(
+                        `Optimization failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+                    );
+                    
+                    // Add error to chat
+                    state.chatHistory.push({
+                        role: 'assistant',
+                        content: `⚠️ Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                        timestamp: Date.now()
+                    });
+                    
+                    state.chatViewProvider.update(state.chatHistory);
+                    state.updateChatHistory(state.chatHistory);
+                }
+            });
+        }),
+        
+        // Clear all suggestions
+        vscode.commands.registerCommand('ai-coding-tutor.clearSuggestions', () => {
+            state.suggestionProvider.updateSuggestions([]);
+            state.codeLensEmitter.fire();
+            clearAllDecorations();
+            vscode.window.showInformationMessage('All AI suggestions cleared');
+        }),
+        
+        // Show tutorial
+        vscode.commands.registerCommand('ai-coding-tutor.showTutorial', () => {
+            const tutorialPanel = vscode.window.createWebviewPanel(
+                'aiTutorTutorial',
+                'AI Coding Tutor - Tutorial',
+                vscode.ViewColumn.One,
+                { enableScripts: true }
+            );
+            
+            tutorialPanel.webview.html = getTutorialHtml();
+        })
+    );
+}
+
+// Helper to clear decorations
+function clearDecorations(editor: vscode.TextEditor, decorationType: vscode.TextEditorDecorationType) {
+    editor.setDecorations(decorationType, []);
+}
+
+function clearAllDecorations() {
+    if (vscode.window.activeTextEditor) {
+        const editor = vscode.window.activeTextEditor;
+        clearDecorations(editor, aiResponseDecorationType);
+        clearDecorations(editor, inlineSuggestionDecorationType);
+        clearDecorations(editor, errorHighlightDecorationType);
+    }
+}
+
+// HTML for tutorial
+function getTutorialHtml(): string {
+    return `<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>AI Coding Tutor Tutorial</title>
+        <style>
+            body {
+                font-family: var(--vscode-font-family);
+                padding: 20px;
+                color: var(--vscode-foreground);
+            }
+            h1, h2 {
+                color: var(--vscode-editor-foreground);
+                border-bottom: 1px solid var(--vscode-panel-border);
+                padding-bottom: 10px;
+            }
+            .feature {
+                margin-bottom: 30px;
+            }
+            .feature h3 {
+                margin-bottom: 5px;
+                color: var(--vscode-textLink-foreground);
+            }
+            .steps {
+                margin-left: 20px;
+            }
+            .step {
+                margin-bottom: 10px;
+            }
+            .command {
+                background-color: var(--vscode-editor-background);
+                border: 1px solid var(--vscode-panel-border);
+                padding: 5px 10px;
+                border-radius: 4px;
+                font-family: var(--vscode-editor-font-family);
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Welcome to AI Coding Tutor</h1>
+        <p>This tutorial will help you get started with the AI Coding Tutor extension.</p>
+        
+        <div class="feature">
+            <h2>Proficiency Levels</h2>
+            <p>The extension provides three levels of assistance to match your experience:</p>
+            <ul>
+                <li><strong>Novice:</strong> Simple explanations focused on basics</li>
+                <li><strong>Medium:</strong> More detailed insights with some advanced concepts</li>
+                <li><strong>Expert:</strong> In-depth technical explanations</li>
+            </ul>
+            <p>To change your level, click on the status bar icon or use the command:</p>
+            <div class="command">AI Coding Tutor: Select Proficiency Level</div>
+        </div>
+        
+        <div class="feature">
+            <h2>Key Features</h2>
+            
+            <div class="feature">
+                <h3>1. Get code suggestions</h3>
+                <div class="steps">
+                    <div class="step">Right-click on a line of code and select "AI Coding Tutor: Get Suggestion"</div>
+                    <div class="step">Or click on a CodeLens suggestion that appears above your code</div>
+                </div>
+            </div>
+            
+            <div class="feature">
+                <h3>2. Analyze entire file</h3>
+                <div class="steps">
+                    <div class="step">Use the command: <span class="command">AI Coding Tutor: Analyze Code</span></div>
+                    <div class="step">Or click the analyze button in the sidebar</div>
+                </div>
+            </div>
+            
+            <div class="feature">
+                <h3>3. Ask questions</h3>
+                <div class="steps">
+                    <div class="step">Open the "Ask Questions" panel in the sidebar</div>
+                    <div class="step">Type your question and press Enter</div>
+                </div>
+            </div>
+            
+            <div class="feature">
+                <h3>4. Explain selected code</h3>
+                <div class="steps">
+                    <div class="step">Select code you want explained</div>
+                    <div class="step">Right-click and choose "AI Coding Tutor: Explain Code"</div>
+                </div>
+            </div>
+        </div>
+        
+        <h2>Getting Help</h2>
+        <p>If you have any questions or issues, you can:</p>
+        <ul>
+            <li>Check the README file for detailed documentation</li>
+            <li>Submit issues on the GitHub repository</li>
+            <li>Ask the AI assistant itself for help using the extension</li>
+        </ul>
+        
+        <h2>Happy Coding!</h2>
+        <p>We hope this extension helps you learn and improve your coding skills.</p>
+    </body>
+    </html>`;
+}
+
+export function deactivate() {
+    // Clean up resources on deactivation
+    clearAllDecorations();
+}

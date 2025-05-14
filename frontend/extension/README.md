@@ -1,71 +1,128 @@
-# ai-coding-tutor README
+# AI Coding Tutor VS Code Extension
 
-This is the README for your extension "ai-coding-tutor". After writing up a brief description, we recommend including the following sections.
+The AI Coding Tutor extension integrates an intelligent coding assistant directly into your VS Code environment. It provides real-time code suggestions, answers to coding questions, and code analysis based on your specified proficiency level.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- **Smart Code Analysis**: Get contextual suggestions and improvements as you code
+- **Three Learning Levels**: Choose between novice, medium, or expert explanations based on your skill level
+- **Inline Suggestions**: View AI recommendations right next to your code
+- **Interactive Q&A**: Ask coding questions through the dedicated chat panel
+- **Code Explanations**: Select any snippet and get it explained in detail
+- **Code Optimization**: Get suggestions to improve your code's performance and readability
+- **Progress Tracking**: View your interaction history and build your knowledge
 
-For example if there is an image subfolder under your extension project workspace:
+## Learning Levels
 
-\!\[feature X\]\(images/feature-x.png\)
+The AI Coding Tutor adapts to your learning needs with three proficiency levels:
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+- **Novice**: Simplified explanations focusing on fundamentals with beginner-friendly terms
+- **Medium**: Balanced explanations with both concepts and implementation details
+- **Expert**: In-depth technical knowledge with advanced patterns and optimizations
 
-## Requirements
+## Usage
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+### Sidebar Panel
+
+Access the AI Coding Tutor through the sidebar icon:
+
+1. **AI Tutor**: Configure settings and access main features
+2. **Ask Questions**: Chat with the AI assistant about coding problems
+3. **Learning History**: Review your past queries and interactions
+
+### Getting Code Suggestions
+
+1. **Inline Suggestions**:
+   - Right-click on a line of code and select "AI Coding Tutor: Get Suggestion"
+   - Or click on the AI suggestion CodeLens that appears above your code
+
+2. **Code Analysis**:
+   - Use the command palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and search for "AI Coding Tutor: Analyze Code"
+   - Or click "Analyze Current File" in the sidebar
+
+3. **Code Explanation**:
+   - Select code you want explained
+   - Right-click and choose "AI Coding Tutor: Explain Code"
+   - View the detailed explanation in the chat panel
+
+4. **Code Optimization**:
+   - Select code you want to optimize
+   - Right-click and choose "AI Coding Tutor: Optimize Code"
+   - Review optimization suggestions and explanations
+
+### Asking Questions
+
+1. Click on the "Ask Questions" panel in the sidebar
+2. Type your coding question and press Enter
+3. Optionally select code first to include it as context for your question
+4. Review the AI's answer with explanations tailored to your proficiency level
+
+## Commands
+
+Access these commands through the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`):
+
+- `AI Coding Tutor: Toggle Activation` - Enable or disable the extension
+- `AI Coding Tutor: Select Proficiency Level` - Change your learning level
+- `AI Coding Tutor: Ask Question` - Ask a coding question to the AI assistant
+- `AI Coding Tutor: Analyze Code` - Analyze the current file for improvements
+- `AI Coding Tutor: Get Suggestion` - Get suggestion for current line/selection
+- `AI Coding Tutor: Explain Code` - Get explanation for selected code
+- `AI Coding Tutor: Optimize Code` - Get optimization suggestions for selected code
+- `AI Coding Tutor: Clear Suggestions` - Clear all current AI suggestions
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
 This extension contributes the following settings:
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+* `aiCodingTutor.enable`: Enable/disable the extension
+* `aiCodingTutor.proficiencyLevel`: Default proficiency level (novice, medium, expert)
+* `aiCodingTutor.backendUrl`: URL of the backend server (default: `http://localhost:8080`)
+* `aiCodingTutor.autoAnalyze`: Automatically analyze code on file save
+* `aiCodingTutor.showInlineDecorations`: Show inline suggestions in the editor
 
-## Known Issues
+## Privacy and Security
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+- Code snippets are sent to the configured backend server for processing
+- Only necessary code context is transmitted, not entire files
+- Configuration allows control over what is sent to the AI service
+- No user data is stored within the extension itself (chat history is stored locally only)
 
-## Release Notes
+## Requirements
 
-Users appreciate release notes as you update your extension.
+- An active backend server (configured via settings)
+- Internet connection for AI processing
+- VS Code version 1.60.0 or higher
 
-### 1.0.0
+## Installation
 
-Initial release of ...
+1. Install from the VS Code Marketplace
+2. Or install via VSIX file:
+   - Download the `.vsix` file from the [releases page](https://github.com/yourusername/AI-Coding-Tutor-IDE-Plugin/releases)
+   - Open VS Code
+   - Press `Ctrl+Shift+P` (Windows/Linux) or `Cmd+Shift+P` (macOS)
+   - Type "Install from VSIX" and select the command
+   - Choose the downloaded file
 
-### 1.0.1
+## Troubleshooting
 
-Fixed issue #.
+If you encounter issues:
 
-### 1.1.0
+1. Check that the backend server is running and accessible
+2. Verify the backend URL in the extension settings
+3. Check your internet connection
+4. Try toggling the extension off and on again
+5. Inspect the VS Code "Output" panel for error messages (select "AI Coding Tutor" from the dropdown)
 
-Added features X, Y, and Z.
+## Contributing
 
----
+The extension is part of the AI Coding Tutor IDE Plugin project. To contribute:
 
-## Following extension guidelines
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+See the [repository](https://github.com/yourusername/AI-Coding-Tutor-IDE-Plugin) for more information.
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+## License
 
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+This extension is licensed under the MIT License. See the LICENSE file for details.

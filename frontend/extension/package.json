@@ -7,22 +7,51 @@
     "vscode": "^1.97.0"
   },
   "categories": [
+    "Programming Languages",
+    "Education",
+    "Snippets",
     "Other"
   ],
+  "keywords": [
+    "ai",
+    "learn",
+    "coding",
+    "tutor",
+    "education"
+  ],
   "activationEvents": [
-    "onLanguage:golang",
-    "onLanguage:java",
-    "onLanguage:python"
+    "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "configuration": {
       "title": "AI Coding Tutor",
       "properties": {
+        "aiCodingTutor.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable AI Coding Tutor"
+        },
+        "aiCodingTutor.proficiencyLevel": {
+          "type": "string",
+          "enum": ["novice", "medium", "expert"],
+          "default": "novice",
+          "description": "Set your proficiency level for AI explanations"
+        },
         "aiCodingTutor.backendUrl": {
           "type": "string",
           "default": "http://localhost:8080",
           "description": "URL of the AI Coding Tutor backend"
+        },
+        "aiCodingTutor.autoAnalyze": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically analyze your code when you save a file"
+        },
+        "aiCodingTutor.showInlineDecorations": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline suggestions in the editor"
         }
       }
     },
@@ -39,28 +68,95 @@
       "aiTutorSidebar": [
         {
           "id": "aiTutorView",
-          "name": "AI Tutor"
+          "name": "AI Tutor",
+          "type": "tree",
+          "visibility": "visible"
+        },
+        {
+          "id": "aiTutorChat",
+          "name": "Ask Questions",
+          "type": "webview"
+        },
+        {
+          "id": "aiTutorHistory",
+          "name": "Learning History",
+          "visibility": "collapsed"
         }
       ]
     },
     "commands": [
       {
+        "command": "ai-coding-tutor.toggleActivation",
+        "title": "AI Coding Tutor: Toggle Activation",
+        "icon": "$(extensions-sync-enabled)"
+      },
+      {
+        "command": "ai-coding-tutor.selectLevel",
+        "title": "AI Coding Tutor: Select Proficiency Level",
+        "icon": "$(mortar-board)"
+      },
+      {
+        "command": "ai-coding-tutor.askQuery",
+        "title": "AI Coding Tutor: Ask Question",
+        "icon": "$(question)"
+      },
+      {
+        "command": "ai-coding-tutor.analyzeCode",
+        "title": "AI Coding Tutor: Analyze Code",
+        "icon": "$(microscope)"
+      },
+      {
         "command": "ai-coding-tutor.getSuggestion",
-        "title": "Get AI Suggestion"
+        "title": "AI Coding Tutor: Get Suggestion",
+        "icon": "$(lightbulb)"
       },
       {
-        "command": "ai-coding-tutor.getHint",
-        "title": "Get AI Hint"
+        "command": "ai-coding-tutor.explainCode",
+        "title": "AI Coding Tutor: Explain Code",
+        "icon": "$(info)"
       },
       {
-        "command": "ai-coding-tutor.getBestPractice",
-        "title": "Get AI Best Practice"
+        "command": "ai-coding-tutor.optimizeCode",
+        "title": "AI Coding Tutor: Optimize Code",
+        "icon": "$(wand)"
       },
       {
-        "command": "ai-coding-tutor.hello",
-        "title": "Hello"
+        "command": "ai-coding-tutor.clearSuggestions",
+        "title": "AI Coding Tutor: Clear Suggestions",
+        "icon": "$(clear-all)"
       }
-    ]
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "ai-coding-tutor.toggleActivation",
+          "when": "view == aiTutorView",
+          "group": "navigation"
+        },
+        {
+          "command": "ai-coding-tutor.analyzeCode",
+          "when": "view == aiTutorView",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "ai-coding-tutor.getSuggestion",
+          "when": "editorTextFocus",
+          "group": "AI Coding Tutor"
+        },
+        {
+          "command": "ai-coding-tutor.explainCode",
+          "when": "editorHasSelection",
+          "group": "AI Coding Tutor"
+        },
+        {
+          "command": "ai-coding-tutor.optimizeCode",
+          "when": "editorHasSelection",
+          "group": "AI Coding Tutor"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -91,6 +187,7 @@
   },
   "dependencies": {
     "lodash": "^4.17.21",
+    "marked": "^12.0.0",
     "node-fetch": "^2.7.0"
   }
 }
