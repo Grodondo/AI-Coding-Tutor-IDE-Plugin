@@ -27,6 +27,7 @@ interface ChatMessage {
     role: 'user' | 'assistant';
     content: string;
     timestamp: number;
+    codeContext?: string; // Store code context separately 
 }
 
 interface CachedIndex {
@@ -108,6 +109,7 @@ export function activate(context: vscode.ExtensionContext) {
     const suggestionCache = new Map<string, SuggestionResponse>();
     const indexCache = new Map<string, CachedIndex>();
     const chatHistory: ChatMessage[] = context.globalState.get('ai-coding-tutor.chatHistory', []);
+    const suggestionQueryIds = new Map<number, string>(); // Map line numbers to query IDs for feedback
     
     // Providers and emitters
     const codeLensEmitter = new vscode.EventEmitter<void>();
@@ -145,6 +147,7 @@ export function activate(context: vscode.ExtensionContext) {
         chatViewProvider,
         indexCache,
         chatHistory,
+        suggestionQueryIds,
         updateChatHistory: (messages) => {
             context.globalState.update('ai-coding-tutor.chatHistory', messages);
         }
@@ -216,7 +219,7 @@ export function activate(context: vscode.ExtensionContext) {
         
         try {
             const fullText = document.getText();
-            const suggestions = await fetchFullCodeSuggestions(fullText, proficiency);
+            const suggestions = await fetchFullCodeSuggestions(fullText, proficiency, suggestionQueryIds);
             suggestionProvider.updateSuggestions(suggestions);
             codeLensEmitter.fire();
         } catch (error) {
@@ -600,7 +603,20 @@ class SuggestionCodeLensProvider implements vscode.CodeLensProvider {
     onDidChangeCodeLenses?: vscode.Event<void>;
 
     updateSuggestions(suggestions: { line: number; message: string; explanation: string; diff?: string }[]) {
-        this.suggestions = suggestions;
+        // Filter to avoid multiple suggestions on the same line
+        const uniqueLineSuggestions: { [line: number]: { line: number; message: string; explanation: string; diff?: string } } = {};
+        
+        // Keep only the most detailed suggestion for each line
+        for (const suggestion of suggestions) {
+            const existingSuggestion = uniqueLineSuggestions[suggestion.line];
+            
+            if (!existingSuggestion || 
+                (suggestion.explanation && suggestion.explanation.length > (existingSuggestion.explanation?.length || 0))) {
+                uniqueLineSuggestions[suggestion.line] = suggestion;
+            }
+        }
+        
+        this.suggestions = Object.values(uniqueLineSuggestions);
     }
 
     provideCodeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
@@ -609,15 +625,34 @@ class SuggestionCodeLensProvider implements vscode.CodeLensProvider {
         const editor = vscode.window.activeTextEditor;
         if (!editor || editor.document.uri.toString() !== document.uri.toString()) return [];
 
-        return this.suggestions.map(({ line, message }) => {
-            const range = document.lineAt(line).range;
-            return new vscode.CodeLens(range, {
-                title: `$(lightbulb) AI Suggestion`,
-                tooltip: message,
-                command: 'ai-coding-tutor.getSuggestion',
-                arguments: [line]
-            });
-        });
+        const codeLenses: vscode.CodeLens[] = [];
+        
+        for (const suggestion of this.suggestions) {
+            // Make sure the line is valid for this document
+            if (suggestion.line >= 0 && suggestion.line < document.lineCount) {
+                const range = document.lineAt(suggestion.line).range;
+                
+                // Create the main suggestion CodeLens
+                codeLenses.push(new vscode.CodeLens(range, {
+                    title: `$(lightbulb) AI Suggestion`,
+                    tooltip: suggestion.message,
+                    command: 'ai-coding-tutor.previewSuggestion',
+                    arguments: [suggestion.line, suggestion.diff]
+                }));
+                
+                // Add "Accept" button if the suggestion has a diff
+                if (suggestion.diff) {
+                    codeLenses.push(new vscode.CodeLens(range, {
+                        title: `$(check) Accept`,
+                        tooltip: "Apply this suggestion",
+                        command: 'ai-coding-tutor.applySuggestion',
+                        arguments: [suggestion.line, suggestion.diff]
+                    }));
+                }
+            }
+        }
+
+        return codeLenses;
     }
 }
 
@@ -636,7 +671,34 @@ function createLoadingDecoration(lineNumber: number): vscode.DecorationOptions {
 
 // Create response decoration
 function createResponseDecoration(lineNumber: number, response: SuggestionResponse): vscode.DecorationOptions {
-    const diffText = response.diff ? `\n\n**Diff Preview:**\n\`\`\`diff\n${response.diff}\n\`\`\`` : '';
+    // Format the diff for display if available
+    let diffDisplay = '';
+    if (response.diff) {
+        // Extract only added lines for preview
+        const addedLines = response.diff
+            .split('\n')
+            .filter(line => line.startsWith('+') && !line.startsWith('+++'))
+            .map(line => line.substring(1))
+            .join('\n');
+            
+        if (addedLines.trim()) {
+            diffDisplay = `\n\n**Suggested Code:**\n\`\`\`\n${addedLines}\n\`\`\``;
+        } else {
+            // If we couldn't extract added lines, show the full diff
+            diffDisplay = `\n\n**Diff Preview:**\n\`\`\`diff\n${response.diff}\n\`\`\``;
+        }
+    }
+    
+    // Create a markdown string with a detailed explanation
+    const hoverMessage = new vscode.MarkdownString(
+        `# ${response.suggestion}\n\n` +
+        `${response.explanation}${diffDisplay}\n\n` +
+        (response.documentationLink ? `[Learn More](${response.documentationLink})\n\n` : '') +
+        `Use the **$(check) Accept** button to apply this suggestion.`
+    );
+    
+    // Enable command links in markdown
+    hoverMessage.isTrusted = true;
     
     return {
         range: new vscode.Range(lineNumber, 0, lineNumber, 0),
@@ -645,18 +707,12 @@ function createResponseDecoration(lineNumber: number, response: SuggestionRespon
                 contentText: `$(lightbulb) ${response.suggestion}`,
                 color: new vscode.ThemeColor('editorInfo.foreground'),
                 fontStyle: 'italic',
-                margin: '0 0 0 1em'
+                margin: '0 0 0 1em',
+                border: '1px solid ' + new vscode.ThemeColor('tab.activeBorderTop'),
+                backgroundColor: new vscode.ThemeColor('editor.findMatchHighlightBackground')
             }
         },
-        hoverMessage: new vscode.MarkdownString(
-            `# AI Suggestion\n\n${response.suggestion}\n\n## Why?\n${response.explanation}${diffText}\n\n${
-                response.documentationLink ? `[Learn More](${response.documentationLink})` : ''
-            }\n\nWas this helpful? [Yes](command:ai-coding-tutor.feedback?${encodeURIComponent(
-                JSON.stringify({ response: response.suggestion, helpful: true })
-            )}) | [No](command:ai-coding-tutor.feedback?${encodeURIComponent(
-                JSON.stringify({ response: response.suggestion, helpful: false })
-            )})`
-        )
+        hoverMessage
     };
 }
 
@@ -712,17 +768,28 @@ async function fetchSuggestionFromBackend(code: string, proficiency: string): Pr
     }
 }
 
-async function fetchFullCodeSuggestions(code: string, proficiency: string): Promise<{ line: number; message: string; explanation: string; diff?: string }[]> {
+async function fetchFullCodeSuggestions(code: string, proficiency: string, suggestionQueryIds?: Map<number, string>): Promise<{ line: number; message: string; explanation: string; diff?: string }[]> {
     const url = `${getBackendUrl()}/api/v1/analyze`;
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code, level: proficiency })
+            body: JSON.stringify({ 
+                code, 
+                level: proficiency,
+                includeLineNumbers: true // Request line-specific suggestions
+            }),
+            signal: controller.signal
         });
         
+        clearTimeout(timeoutId);
+        
         if (!response.ok) {
-            throw new Error(`Backend error: ${response.statusText}`);
+            const errorText = await response.text().catch(() => 'Unknown error');
+            throw new Error(`Backend error: ${response.status} ${response.statusText} - ${errorText}`);
         }
         
         const data = await response.json() as AnalysisResponse;
@@ -733,12 +800,114 @@ async function fetchFullCodeSuggestions(code: string, proficiency: string): Prom
             return [];
         }
         
-        return data.suggestions.map(s => ({
-            line: s.line,
-            message: s.message,
-            explanation: s.explanation || 'No additional explanation provided.',
-            diff: s.diff || undefined
-        }));
+        console.log('Raw analysis response:', data);
+        
+        // Process each suggestion to generate a diff
+        const enhancedSuggestions = await Promise.all(
+            data.suggestions.map(async s => {
+                // Clone the suggestion
+                const enhancedSuggestion = { 
+                    line: s.line,
+                    message: s.message,
+                    explanation: s.explanation || 'No additional explanation provided.',
+                    diff: s.diff
+                };
+                
+                // If the suggestion doesn't have a diff, try to generate one
+                if (!enhancedSuggestion.diff && enhancedSuggestion.line !== undefined) {
+                    try {
+                        // Get the current line and surrounding context
+                        const editor = vscode.window.activeTextEditor;
+                        if (editor) {
+                            const lineNumber = enhancedSuggestion.line;
+                            const document = editor.document;
+                            
+                            // Get the indented code block only
+                            const startLine = lineNumber;
+                            const baseIndent = document.lineAt(startLine).firstNonWhitespaceCharacterIndex;
+                            let endLine = startLine;
+                            
+                            // Find the end of the indented block
+                            for (let i = startLine + 1; i < document.lineCount; i++) {
+                                const line = document.lineAt(i);
+                                if (line.text.trim() === '' || line.firstNonWhitespaceCharacterIndex <= baseIndent) {
+                                    // If empty line or outdented, we've reached the end of the block
+                                    // But check if the next line is more indented, in which case continue
+                                    if (i + 1 < document.lineCount) {
+                                        const nextLine = document.lineAt(i + 1);
+                                        if (nextLine.firstNonWhitespaceCharacterIndex > baseIndent) {
+                                            continue; // Include this line as it's part of the block
+                                        }
+                                    }
+                                    break;
+                                }
+                                endLine = i;
+                            }
+                            
+                            let contextCode = '';
+                            for (let i = startLine; i <= endLine; i++) {
+                                const line = document.lineAt(i).text;
+                                if (i === lineNumber) {
+                                    contextCode += `[CURRENT LINE] ${line}\n`;
+                                } else {
+                                    contextCode += line + '\n';
+                                }
+                            }
+                            
+                            // Generate a query to improve this specific block
+                            const query = `The code below needs improvement. The issue is: ${enhancedSuggestion.message}
+Please provide a specific replacement for this indented code block as a diff format.
+Only return the exact code that should replace the current code block, with proper indentation.
+Do not add explanations in the code block.
+
+${contextCode}`;
+                            
+                            // Use the query endpoint to get a better suggestion
+                            const { id, response } = await fetchQueryResponse(query, proficiency);
+                            
+                            // Store the query ID for feedback
+                            if (suggestionQueryIds) {
+                                suggestionQueryIds.set(lineNumber, id);
+                            }
+                            
+                            // Extract code block from response
+                            const codeBlockRegex = /```(?:.*?)\n([\s\S]*?)```/g;
+                            let match;
+                            let improvedCode = '';
+                            
+                            while ((match = codeBlockRegex.exec(response)) !== null) {
+                                improvedCode = match[1].trim();
+                            }
+                            
+                            if (improvedCode) {
+                                // Create a simple diff format
+                                const originalBlock = document.getText(new vscode.Range(startLine, 0, endLine + 1, 0));
+                                enhancedSuggestion.diff = `- ${originalBlock.replace(/\n/g, '\n- ')}\n+ ${improvedCode.replace(/\n/g, '\n+ ')}`;
+                                
+                                // Enhance the explanation with more details from the response
+                                if (enhancedSuggestion.explanation === 'No additional explanation provided.') {
+                                    // Remove code blocks from response to get explanation
+                                    let explanation = response.replace(codeBlockRegex, '').trim();
+                                    
+                                    // If explanation is too long, trim it
+                                    if (explanation.length > 500) {
+                                        explanation = explanation.substring(0, 500) + '...';
+                                    }
+                                    
+                                    enhancedSuggestion.explanation = explanation || 'No additional explanation provided.';
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error generating diff for line', enhancedSuggestion.line, error);
+                    }
+                }
+                
+                return enhancedSuggestion;
+            })
+        );
+        
+        return enhancedSuggestions;
     } catch (error) {
         console.error(`fetchFullCodeSuggestions error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         throw error;
@@ -796,6 +965,7 @@ function registerCommands(
         chatViewProvider: ChatViewProvider;
         indexCache: Map<string, CachedIndex>;
         chatHistory: ChatMessage[];
+        suggestionQueryIds: Map<number, string>;
         updateChatHistory: (messages: ChatMessage[]) => void;
     }
 ) {
@@ -872,11 +1042,12 @@ function registerCommands(
                 }
             }
             
-            // Add to chat view
+            // Add to chat view - but don't display the code context in the UI
             state.chatHistory.push({
                 role: 'user',
-                content: query + (codeContext ? `\n\n\`\`\`\n${codeContext}\n\`\`\`` : ''),
-                timestamp: Date.now()
+                content: query, // Only display the question itself
+                timestamp: Date.now(),
+                codeContext: codeContext // Store separately
             });
             
             state.chatViewProvider.update(state.chatHistory);
@@ -896,15 +1067,23 @@ function registerCommands(
                     const fullQuery = codeContext ? `${query}\n\nCode context:${fileInfo}\n${codeContext}` : query;
                     const { id, response } = await fetchQueryResponse(fullQuery, state.proficiency);
                     
+                    // Parse the response to look for code blocks
+                    const parsedResponse = await parseResponseForCodeChanges(response, editor);
+                    
                     // Add to chat history
                     state.chatHistory.push({
                         role: 'assistant',
-                        content: response,
+                        content: parsedResponse.message,
                         timestamp: Date.now()
                     });
                     
                     state.chatViewProvider.update(state.chatHistory);
                     state.updateChatHistory(state.chatHistory);
+                    
+                    // If there are code changes, display them inline
+                    if (parsedResponse.codeChanges && parsedResponse.codeChanges.length > 0 && editor) {
+                        await showCodeChangeSuggestions(editor, parsedResponse.codeChanges);
+                    }
                     
                     // Show feedback options
                     const feedbackOptions = ['👍 Helpful', '👎 Not Helpful'];
@@ -936,72 +1115,154 @@ function registerCommands(
             });
         }),
         
-        // Get suggestion for current line
-        vscode.commands.registerCommand('ai-coding-tutor.getSuggestion', async (lineNumber?: number) => {
+        // Preview suggestion
+        vscode.commands.registerCommand('ai-coding-tutor.previewSuggestion', async (lineNumber: number, diff: string) => {
             if (!state.isActive || !vscode.window.activeTextEditor) return;
             
             const editor = vscode.window.activeTextEditor;
-            const targetLine = lineNumber !== undefined ? lineNumber : editor.selection.active.line;
-            const lineText = editor.document.lineAt(targetLine).text.trim();
-            const filePath = editor.document.uri.fsPath;
-            const cacheKey = `${filePath}:${targetLine}:${lineText}`;
+            const document = editor.document;
             
-            // Clear other decorations first
-            clearDecorations(editor, aiResponseDecorationType);
-            
-            // Check cache
-            if (state.suggestionCache.has(cacheKey)) {
-                const cached = state.suggestionCache.get(cacheKey)!;
-                if (shouldShowInlineDecorations()) {
-                    editor.setDecorations(aiResponseDecorationType, [
-                        createResponseDecoration(targetLine, cached)
-                    ]);
-                }
-                return;
-            }
-            
-            // Show loading state
-            if (shouldShowInlineDecorations()) {
-                editor.setDecorations(aiResponseDecorationType, [
-                    createLoadingDecoration(targetLine)
-                ]);
-            }
-            
-            // Show progress
-            vscode.window.withProgress({
-                location: vscode.ProgressLocation.Notification,
-                title: "AI Coding Tutor",
-                cancellable: false
-            }, async (progress) => {
-                progress.report({ message: "Analyzing code..." });
+            try {
+                // First, determine the code block to replace
+                const startLine = lineNumber;
+                const baseIndent = document.lineAt(startLine).firstNonWhitespaceCharacterIndex;
+                let endLine = startLine;
                 
-                try {
-                    // Get surrounding code for context (5 lines before and after)
-                    const startLine = Math.max(0, targetLine - 5);
-                    const endLine = Math.min(editor.document.lineCount - 1, targetLine + 5);
-                    let contextLines = '';
-                    
-                    for (let i = startLine; i <= endLine; i++) {
-                        const line = editor.document.lineAt(i).text;
-                        contextLines += line + '\n';
+                // Find the end of the indented block
+                for (let i = startLine + 1; i < document.lineCount; i++) {
+                    const line = document.lineAt(i);
+                    if (line.text.trim() === '' || line.firstNonWhitespaceCharacterIndex <= baseIndent) {
+                        // If empty line or outdented, we've reached the end of the block
+                        // But check if the next line is more indented, in which case continue
+                        if (i + 1 < document.lineCount) {
+                            const nextLine = document.lineAt(i + 1);
+                            if (nextLine.firstNonWhitespaceCharacterIndex > baseIndent) {
+                                continue; // Include this line as it's part of the block
+                            }
+                        }
+                        break;
                     }
-                    
-                    const response = await fetchSuggestionFromBackend(contextLines, state.proficiency);
-                    state.suggestionCache.set(cacheKey, response);
-                    
-                    if (shouldShowInlineDecorations()) {
-                        editor.setDecorations(aiResponseDecorationType, [
-                            createResponseDecoration(targetLine, response)
-                        ]);
-                    }
-                    
-                } catch (error) {
-                    clearDecorations(editor, aiResponseDecorationType);
-                    vscode.window.showErrorMessage(
-                        `Failed to get suggestion: ${error instanceof Error ? error.message : 'Unknown error'}`
-                    );
+                    endLine = i;
                 }
-            });
+                
+                // Extract the new code from the diff
+                let newCode = '';
+                if (diff && diff.includes('+')) {
+                    const lines = diff.split('\n');
+                    const addedLines = lines.filter(line => line.startsWith('+') && !line.startsWith('+++'));
+                    newCode = addedLines.map(line => line.substring(1)).join('\n');
+                } else if (diff) {
+                    // If diff format is not recognized, use the whole diff as new code
+                    newCode = diff;
+                }
+                
+                if (!newCode) {
+                    vscode.window.showWarningMessage('No suggested code found in the diff');
+                    return;
+                }
+                
+                // Save the original code for restoration
+                const originalRange = new vscode.Range(startLine, 0, endLine + 1, 0);
+                const originalCode = document.getText(originalRange);
+                
+                // Create a temporary preview of the change
+                const edit = new vscode.WorkspaceEdit();
+                edit.replace(document.uri, originalRange, newCode);
+                await vscode.workspace.applyEdit(edit);
+                
+                // Show buttons to accept or reject
+                vscode.window.showInformationMessage(
+                    'Preview of suggested changes. Would you like to keep them?',
+                    { modal: false },
+                    'Accept Changes', 'Reject Changes'
+                ).then(async selection => {
+                    if (selection === 'Reject Changes') {
+                        // Restore original code
+                        const revertEdit = new vscode.WorkspaceEdit();
+                        revertEdit.replace(document.uri, new vscode.Range(startLine, 0, startLine + newCode.split('\n').length, 0), originalCode);
+                        await vscode.workspace.applyEdit(revertEdit);
+                    } else if (selection === 'Accept Changes') {
+                        // Send positive feedback
+                        const queryId = state.suggestionQueryIds.get(lineNumber);
+                        if (queryId) {
+                            await sendFeedbackToBackend(queryId, true);
+                            state.suggestionQueryIds.delete(lineNumber);
+                        }
+                        vscode.window.showInformationMessage('Changes applied successfully');
+                    }
+                });
+                
+            } catch (error) {
+                vscode.window.showErrorMessage(
+                    `Failed to preview suggestion: ${error instanceof Error ? error.message : 'Unknown error'}`
+                );
+            }
+        }),
+        
+        // Apply suggestion
+        vscode.commands.registerCommand('ai-coding-tutor.applySuggestion', async (lineNumber: number, diff: string) => {
+            if (!state.isActive || !vscode.window.activeTextEditor) return;
+            
+            const editor = vscode.window.activeTextEditor;
+            const document = editor.document;
+            
+            try {
+                // First, determine the code block to replace
+                const startLine = lineNumber;
+                const baseIndent = document.lineAt(startLine).firstNonWhitespaceCharacterIndex;
+                let endLine = startLine;
+                
+                // Find the end of the indented block
+                for (let i = startLine + 1; i < document.lineCount; i++) {
+                    const line = document.lineAt(i);
+                    if (line.text.trim() === '' || line.firstNonWhitespaceCharacterIndex <= baseIndent) {
+                        // If empty line or outdented, we've reached the end of the block
+                        // But check if the next line is more indented, in which case continue
+                        if (i + 1 < document.lineCount) {
+                            const nextLine = document.lineAt(i + 1);
+                            if (nextLine.firstNonWhitespaceCharacterIndex > baseIndent) {
+                                continue; // Include this line as it's part of the block
+                            }
+                        }
+                        break;
+                    }
+                    endLine = i;
+                }
+                
+                // Extract the new code from the diff
+                let newCode = '';
+                if (diff && diff.includes('+')) {
+                    const lines = diff.split('\n');
+                    const addedLines = lines.filter(line => line.startsWith('+') && !line.startsWith('+++'));
+                    newCode = addedLines.map(line => line.substring(1)).join('\n');
+                } else if (diff) {
+                    // If diff format is not recognized, use the whole diff as new code
+                    newCode = diff;
+                }
+                
+                if (!newCode) {
+                    vscode.window.showWarningMessage('No suggested code found in the diff');
+                    return;
+                }
+                
+                // Apply the edit to the indented block
+                const edit = new vscode.WorkspaceEdit();
+                edit.replace(document.uri, new vscode.Range(startLine, 0, endLine + 1, 0), newCode);
+                await vscode.workspace.applyEdit(edit);
+                
+                // Send feedback that the suggestion was accepted
+                const queryId = state.suggestionQueryIds.get(lineNumber);
+                if (queryId) {
+                    await sendFeedbackToBackend(queryId, true);
+                    state.suggestionQueryIds.delete(lineNumber);
+                }
+                
+                vscode.window.showInformationMessage('Code suggestion applied successfully');
+            } catch (error) {
+                vscode.window.showErrorMessage(
+                    `Failed to apply suggestion: ${error instanceof Error ? error.message : 'Unknown error'}`
+                );
+            }
         }),
         
         // Analyze entire file
@@ -1010,12 +1271,8 @@ function registerCommands(
             
             const editor = vscode.window.activeTextEditor;
             const document = editor.document;
-            const workspacePath = vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath;
-            
-            if (!workspacePath) {
-                vscode.window.showWarningMessage('Unable to analyze code: No workspace folder found');
-                return;
-            }
+            const fileName = path.basename(document.uri.fsPath);
+            const language = document.languageId;
             
             // Show progress
             vscode.window.withProgress({
@@ -1023,36 +1280,57 @@ function registerCommands(
                 title: "AI Coding Tutor",
                 cancellable: false
             }, async (progress) => {
-                progress.report({ message: "Analyzing code..." });
-                
-                // Index workspace if needed
-                const cached = state.indexCache.get(workspacePath);
-                const now = Date.now();
-                
-                if (!cached || now - cached.lastIndexed > 3600000) { // Refresh every hour
-                    progress.report({ message: "Indexing workspace..." });
-                    const exclusions = readAugmentIgnore(workspacePath);
-                    const files = await indexWorkspace(workspacePath, exclusions);
-                    state.indexCache.set(workspacePath, { files, lastIndexed: now });
-                }
+                progress.report({ message: `Analyzing ${fileName}...` });
                 
                 // Analyze code
                 try {
                     const fullText = document.getText();
-                    console.log("Sending code for analysis:", fullText.length, "characters");
-                    const suggestions = await fetchFullCodeSuggestions(fullText, state.proficiency);
+                    console.log(`Sending code for analysis: ${fullText.length} characters, language: ${language}`);
+                    
+                    // Add file metadata to help the AI provide better analysis
+                    const metadataComment = `// Analyzing file: ${fileName}\n// Language: ${language}\n`;
+                    const codeWithMetadata = metadataComment + fullText;
+                    
+                    const suggestions = await fetchFullCodeSuggestions(codeWithMetadata, state.proficiency, state.suggestionQueryIds);
                     console.log("Received suggestions:", suggestions);
                     
+                    if (suggestions.length === 0) {
+                        vscode.window.showInformationMessage(`No suggestions found for ${fileName}.`);
+                        return;
+                    }
+                    
+                    // Update the suggestionProvider with the received suggestions
                     state.suggestionProvider.updateSuggestions(suggestions);
                     state.codeLensEmitter.fire();
                     
-                    if (suggestions.length === 0) {
-                        vscode.window.showInformationMessage('No suggestions found for this code.');
-                    } else {
-                        vscode.window.showInformationMessage(
-                            `Found ${suggestions.length} suggestion${suggestions.length === 1 ? '' : 's'} for your code.`
-                        );
-                    }
+                    vscode.window.showInformationMessage(
+                        `Found ${suggestions.length} suggestion${suggestions.length === 1 ? '' : 's'} for your code.`,
+                        'Show All'
+                    ).then(selection => {
+                        if (selection === 'Show All') {
+                            // Create a quick pick to show all suggestions
+                            const items = suggestions.map(s => ({
+                                label: `Line ${s.line + 1}: ${s.message.substring(0, 60)}${s.message.length > 60 ? '...' : ''}`,
+                                detail: s.explanation,
+                                lineNumber: s.line
+                            }));
+                            
+                            vscode.window.showQuickPick(items, {
+                                placeHolder: 'Select a suggestion to jump to',
+                                matchOnDetail: true
+                            }).then(selected => {
+                                if (selected) {
+                                    // Jump to the selected line
+                                    const position = new vscode.Position(selected.lineNumber, 0);
+                                    editor.selection = new vscode.Selection(position, position);
+                                    editor.revealRange(
+                                        new vscode.Range(position, position),
+                                        vscode.TextEditorRevealType.InCenter
+                                    );
+                                }
+                            });
+                        }
+                    });
                 } catch (error) {
                     console.error("Analysis error:", error);
                     vscode.window.showErrorMessage(
@@ -1411,4 +1689,159 @@ async function indexWorkspace(workspacePath: string, exclusions: string[]): Prom
 export function deactivate() {
     // Clean up resources on deactivation
     clearAllDecorations();
+}
+
+// Helper function to parse AI responses for code blocks and change suggestions
+interface CodeChange {
+    startLine: number;
+    endLine: number;
+    newCode: string;
+    explanation: string;
+}
+
+interface ParsedResponse {
+    message: string;
+    codeChanges: CodeChange[];
+}
+
+// Parse an AI response to extract code changes
+async function parseResponseForCodeChanges(response: string, editor?: vscode.TextEditor): Promise<ParsedResponse> {
+    if (!editor) {
+        return { message: response, codeChanges: [] };
+    }
+    
+    const codeChanges: CodeChange[] = [];
+    let message = response;
+    
+    // Match all code blocks with optional language specification
+    const codeBlockRegex = /```(?:diff)?\s*([^]*?)```/g;
+    let match;
+    
+    // Extract all code blocks from the response
+    while ((match = codeBlockRegex.exec(response)) !== null) {
+        const fullMatch = match[0];
+        const codeContent = match[1].trim();
+        
+        if (codeContent.includes('+++') || codeContent.includes('---') || codeContent.includes('+') || codeContent.includes('-')) {
+            // This looks like a diff, try to extract it
+            try {
+                // For simplicity, we'll look for lines that are added (+) and where they should be added
+                const lines = codeContent.split('\n');
+                let currentCodeSegment = '';
+                let currentStartLine = -1;
+                let currentEndLine = -1;
+                let explanation = '';
+                
+                // Look for context lines to help us locate the position
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    
+                    // Look for context, which is usually a few lines that haven't changed
+                    if (!line.startsWith('+') && !line.startsWith('-')) {
+                        if (line.trim().length > 0) {
+                            // Search for this line in the editor
+                            const editorContent = editor.document.getText();
+                            const lineIndex = editorContent.indexOf(line.trim());
+                            
+                            if (lineIndex >= 0) {
+                                // Find the line number for this text
+                                const position = editor.document.positionAt(lineIndex);
+                                currentStartLine = position.line;
+                                
+                                // Collect all + lines that follow until the next context line
+                                currentCodeSegment = '';
+                                while (i + 1 < lines.length && (lines[i + 1].startsWith('+') || lines[i + 1].trim() === '')) {
+                                    if (lines[i + 1].startsWith('+')) {
+                                        currentCodeSegment += lines[i + 1].substring(1) + '\n';
+                                    } else {
+                                        currentCodeSegment += '\n';
+                                    }
+                                    i++;
+                                }
+                                
+                                if (currentCodeSegment.trim().length > 0) {
+                                    // We found a valid code segment to replace at this line
+                                    currentEndLine = currentStartLine + 1; // Default to replacing one line
+                                    
+                                    // Look for explanation before or after the code block
+                                    const codeBlockIndex = response.indexOf(fullMatch);
+                                    const previousText = response.substring(0, codeBlockIndex).trim();
+                                    const lastParagraph = previousText.split('\n\n').pop() || '';
+                                    
+                                    if (lastParagraph && !lastParagraph.includes('```')) {
+                                        explanation = lastParagraph;
+                                    }
+                                    
+                                    codeChanges.push({
+                                        startLine: currentStartLine,
+                                        endLine: currentEndLine,
+                                        newCode: currentCodeSegment.trim(),
+                                        explanation: explanation
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error parsing diff:', error);
+            }
+        }
+        
+        // Remove the full match from the message to be displayed
+        message = message.replace(fullMatch, '**[Code change suggestion]**\n*See inline suggestion in editor*');
+    }
+    
+    return {
+        message,
+        codeChanges
+    };
+}
+
+// Display code change suggestions in the editor
+async function showCodeChangeSuggestions(editor: vscode.TextEditor, changes: CodeChange[]): Promise<void> {
+    for (const change of changes) {
+        const startPos = new vscode.Position(change.startLine, 0);
+        const endPos = new vscode.Position(change.endLine, 0);
+        const range = new vscode.Range(startPos, endPos);
+        
+        // Create a code lens to show the suggestion
+        const options: vscode.DecorationOptions = {
+            range,
+            hoverMessage: new vscode.MarkdownString(
+                `### Suggested Change\n${change.explanation}\n\n` +
+                "```\n" + change.newCode + "\n```\n\n" +
+                "Use context menu to apply or dismiss."
+            )
+        };
+        
+        // Add a decoration to highlight the code
+        const decoration = vscode.window.createTextEditorDecorationType({
+            backgroundColor: new vscode.ThemeColor('editor.hoverHighlightBackground'),
+            border: '1px dashed ' + new vscode.ThemeColor('editor.selectionBackground'),
+            after: {
+                contentText: ' // AI suggestion available',
+                color: new vscode.ThemeColor('editorCodeLens.foreground'),
+                fontStyle: 'italic'
+            }
+        });
+        
+        editor.setDecorations(decoration, [options]);
+        
+        // Show a message to the user
+        vscode.window.showInformationMessage(
+            'AI suggested code changes are available (see highlighted areas)',
+            'Apply Changes', 'Dismiss'
+        ).then(selection => {
+            if (selection === 'Apply Changes') {
+                // Apply the change
+                editor.edit(editBuilder => {
+                    editBuilder.replace(range, change.newCode);
+                });
+            }
+            
+            // Always remove the decoration when the user makes a decision
+            editor.setDecorations(decoration, []);
+        });
+    }
 }
