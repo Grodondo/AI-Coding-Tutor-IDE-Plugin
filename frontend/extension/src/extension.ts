@@ -324,107 +324,298 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>AI Coding Tutor Chat</title>
             <style>
+                :root {
+                    --message-spacing: 16px;
+                    --border-radius: 8px;
+                    --transition-speed: 0.2s;
+                    --header-height: 48px;
+                }
+                
                 body {
                     padding: 0;
                     margin: 0;
                     font-family: var(--vscode-font-family);
                     color: var(--vscode-foreground);
+                    background-color: var(--vscode-editor-background);
                 }
+                
                 .container {
                     display: flex;
                     flex-direction: column;
                     height: 100vh;
                     max-height: 100vh;
                 }
+                
+                .header {
+                    height: var(--header-height);
+                    display: flex;
+                    align-items: center;
+                    padding: 0 16px;
+                    background-color: var(--vscode-editor-background);
+                    border-bottom: 1px solid var(--vscode-panel-border);
+                    position: sticky;
+                    top: 0;
+                    z-index: 10;
+                }
+                
+                .header-title {
+                    font-size: 14px;
+                    font-weight: 600;
+                    flex: 1;
+                }
+                
+                .header-actions {
+                    display: flex;
+                    gap: 8px;
+                }
+                
+                .header-button {
+                    background: transparent;
+                    border: none;
+                    color: var(--vscode-foreground);
+                    cursor: pointer;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    opacity: 0.8;
+                    transition: all var(--transition-speed) ease;
+                }
+                
+                .header-button:hover {
+                    opacity: 1;
+                    background-color: var(--vscode-toolbar-hoverBackground);
+                }
+                
                 .chat-messages {
                     flex: 1;
                     overflow-y: auto;
-                    padding: 10px;
+                    padding: 16px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: var(--message-spacing);
                 }
+                
+                .message-group {
+                    display: flex;
+                    flex-direction: column;
+                    width: 100%;
+                    margin-bottom: var(--message-spacing);
+                }
+                
                 .message {
-                    margin-bottom: 15px;
                     max-width: 85%;
+                    position: relative;
+                    transition: transform 0.2s ease;
                 }
+                
+                .message:hover {
+                    transform: translateY(-1px);
+                }
+                
                 .user-message {
                     align-self: flex-end;
                     margin-left: auto;
-                    background-color: var(--vscode-editor-infoBackground);
-                    border-radius: 10px 10px 0 10px;
-                    padding: 8px 12px;
+                    background-color: var(--vscode-button-background);
+                    color: var(--vscode-button-foreground);
+                    border-radius: var(--border-radius) var(--border-radius) 0 var(--border-radius);
+                    padding: 12px 16px;
+                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
                 }
+                
                 .assistant-message {
                     align-self: flex-start;
                     background-color: var(--vscode-editor-background);
                     border: 1px solid var(--vscode-panel-border);
-                    border-radius: 10px 10px 10px 0;
-                    padding: 8px 12px;
+                    border-radius: var(--border-radius) var(--border-radius) var(--border-radius) 0;
+                    padding: 12px 16px;
+                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
                 }
+                
+                .message-header {
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 4px;
+                    font-size: 12px;
+                    color: var(--vscode-descriptionForeground);
+                }
+                
+                .message-avatar {
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-right: 8px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    background-color: var(--vscode-badge-background);
+                    color: var(--vscode-badge-foreground);
+                }
+                
+                .user-avatar {
+                    background-color: var(--vscode-button-background);
+                }
+                
+                .message-sender {
+                    font-weight: 600;
+                    margin-right: 8px;
+                }
+                
                 .message-content {
                     white-space: pre-wrap;
                     word-break: break-word;
+                    line-height: 1.5;
                 }
+                
                 .message-time {
-                    font-size: 0.8em;
+                    font-size: 11px;
                     color: var(--vscode-descriptionForeground);
-                    margin-top: 4px;
+                    margin-top: 6px;
                     text-align: right;
+                    opacity: 0.8;
                 }
+                
                 .input-container {
                     display: flex;
-                    padding: 10px;
+                    padding: 16px;
                     border-top: 1px solid var(--vscode-panel-border);
+                    background-color: var(--vscode-editor-background);
+                    position: sticky;
+                    bottom: 0;
                 }
+                
                 #questionInput {
                     flex: 1;
-                    padding: 8px;
+                    padding: 10px 12px;
                     border: 1px solid var(--vscode-input-border);
                     background-color: var(--vscode-input-background);
                     color: var(--vscode-input-foreground);
-                    border-radius: 4px;
+                    border-radius: var(--border-radius);
                     resize: none;
                     min-height: 40px;
                     max-height: 120px;
+                    font-family: var(--vscode-font-family);
+                    font-size: 13px;
+                    transition: border-color var(--transition-speed) ease;
                 }
+                
+                #questionInput:focus {
+                    outline: none;
+                    border-color: var(--vscode-focusBorder);
+                }
+                
                 .send-button {
                     margin-left: 8px;
                     background-color: var(--vscode-button-background);
                     color: var(--vscode-button-foreground);
                     border: none;
-                    padding: 0 12px;
-                    border-radius: 4px;
+                    padding: 0 16px;
+                    border-radius: var(--border-radius);
                     cursor: pointer;
+                    font-weight: 500;
+                    transition: background-color var(--transition-speed) ease;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
                 }
+                
                 .send-button:hover {
                     background-color: var(--vscode-button-hoverBackground);
                 }
-                .markdown-body {
-                    line-height: 1.5;
+                
+                .send-button:active {
+                    transform: translateY(1px);
                 }
+                
+                .markdown-body {
+                    line-height: 1.6;
+                }
+                
                 .markdown-body pre {
                     background-color: var(--vscode-textCodeBlock-background);
-                    border-radius: 3px;
-                    padding: 8px;
+                    border-radius: var(--border-radius);
+                    padding: 12px;
                     overflow-x: auto;
+                    margin: 12px 0;
+                    border: 1px solid var(--vscode-panel-border);
                 }
+                
                 .markdown-body code {
                     font-family: var(--vscode-editor-font-family);
                     background-color: var(--vscode-textCodeBlock-background);
                     padding: 2px 4px;
                     border-radius: 3px;
+                    font-size: 0.9em;
                 }
+                
                 .empty-state {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    height: 100%;
+                    padding: 20px;
                     text-align: center;
-                    margin-top: 50px;
                     color: var(--vscode-descriptionForeground);
+                }
+                
+                .empty-state-icon {
+                    font-size: 48px;
+                    margin-bottom: 16px;
+                    opacity: 0.7;
+                }
+                
+                .empty-state-title {
+                    font-size: 16px;
+                    font-weight: 600;
+                    margin-bottom: 8px;
+                }
+                
+                .empty-state-description {
+                    font-size: 13px;
+                    max-width: 300px;
+                    line-height: 1.5;
+                }
+                
+                /* Scrollbar styling */
+                .chat-messages::-webkit-scrollbar {
+                    width: 8px;
+                }
+                
+                .chat-messages::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                
+                .chat-messages::-webkit-scrollbar-thumb {
+                    background-color: var(--vscode-scrollbarSlider-background);
+                    border-radius: 4px;
+                }
+                
+                .chat-messages::-webkit-scrollbar-thumb:hover {
+                    background-color: var(--vscode-scrollbarSlider-hoverBackground);
                 }
             </style>
         </head>
         <body>
             <div class="container">
+                <div class="header">
+                    <div class="header-title">AI Coding Tutor Chat</div>
+                    <div class="header-actions">
+                        <button class="header-button" id="clearButton" title="Clear conversation">
+                            <span class="codicon codicon-clear-all"></span>
+                        </button>
+                    </div>
+                </div>
                 <div id="chatMessages" class="chat-messages">
                     <div class="empty-state">
-                        <p>Ask the AI Coding Tutor a question about your code.</p>
-                        <p>Your conversation will appear here.</p>
+                        <div class="empty-state-icon">💬</div>
+                        <div class="empty-state-title">Welcome to AI Coding Tutor</div>
+                        <div class="empty-state-description">
+                            Ask questions about your code, request explanations, or get help with programming concepts.
+                        </div>
                     </div>
                 </div>
                 <div class="input-container">
@@ -445,6 +636,7 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
                     const chatMessages = document.getElementById('chatMessages');
                     const questionInput = document.getElementById('questionInput');
                     const sendButton = document.getElementById('sendButton');
+                    const clearButton = document.getElementById('clearButton');
                     
                     // Auto-resize textarea
                     questionInput.addEventListener('input', function() {
@@ -476,10 +668,26 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
                     // Handle send button click
                     sendButton.addEventListener('click', sendMessage);
                     
+                    // Handle clear button click
+                    if (clearButton) {
+                        clearButton.addEventListener('click', function() {
+                            if (confirm('Are you sure you want to clear the conversation history?')) {
+                                vscode.postMessage({
+                                    type: 'clearHistory'
+                                });
+                            }
+                        });
+                    }
+                    
                     // Format timestamp
                     function formatTime(timestamp) {
                         const date = new Date(timestamp);
                         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    }
+                    
+                    // Get initials for avatar
+                    function getInitials(role) {
+                        return role === 'user' ? 'U' : 'AI';
                     }
                     
                     // Render messages
@@ -491,27 +699,77 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
                             // Show empty state
                             chatMessages.innerHTML = \`
                                 <div class="empty-state">
-                                    <p>Ask the AI Coding Tutor a question about your code.</p>
-                                    <p>Your conversation will appear here.</p>
+                                    <div class="empty-state-icon">💬</div>
+                                    <div class="empty-state-title">Welcome to AI Coding Tutor</div>
+                                    <div class="empty-state-description">
+                                        Ask questions about your code, request explanations, or get help with programming concepts.
+                                    </div>
                                 </div>
                             \`;
                             return;
                         }
                         
-                        // Add messages
+                        // Group messages by role for better visual separation
+                        let currentRole = null;
+                        let currentGroup = null;
+                        
                         messages.forEach(msg => {
+                            // Create a new message group if role changes
+                            if (msg.role !== currentRole) {
+                                currentRole = msg.role;
+                                currentGroup = document.createElement('div');
+                                currentGroup.className = 'message-group';
+                                chatMessages.appendChild(currentGroup);
+                            }
+                            
                             const messageDiv = document.createElement('div');
                             messageDiv.className = \`message \${msg.role === 'user' ? 'user-message' : 'assistant-message'}\`;
+                            
+                            // Add message header with avatar and role
+                            const headerDiv = document.createElement('div');
+                            headerDiv.className = 'message-header';
+                            
+                            const avatarDiv = document.createElement('div');
+                            avatarDiv.className = \`message-avatar \${msg.role === 'user' ? 'user-avatar' : ''}\`;
+                            avatarDiv.textContent = getInitials(msg.role);
+                            
+                            const senderDiv = document.createElement('div');
+                            senderDiv.className = 'message-sender';
+                            senderDiv.textContent = msg.role === 'user' ? 'You' : 'AI Tutor';
+                            
+                            headerDiv.appendChild(avatarDiv);
+                            headerDiv.appendChild(senderDiv);
                             
                             const contentDiv = document.createElement('div');
                             contentDiv.className = 'message-content markdown-body';
                             
                             // Format code blocks in assistant messages
                             if (msg.role === 'assistant') {
-                                // Simple markdown-like parsing for code blocks
-                                let content = msg.content.replace(/\`\`\`([\\s\\S]*?)\`\`\`/g, '<pre><code>$1</code></pre>');
+                                // Enhanced markdown parsing for code blocks
+                                let content = msg.content;
+                                
+                                // Code blocks with language
+                                content = content.replace(/\`\`\`([a-z]*)\n([\\s\\S]*?)\`\`\`/g, (match, lang, code) => {
+                                    return \`<pre><code class="language-\${lang || 'text'}">\${code}</code></pre>\`;
+                                });
+                                
+                                // Code blocks without language
+                                content = content.replace(/\`\`\`([\\s\\S]*?)\`\`\`/g, '<pre><code>$1</code></pre>');
+                                
                                 // Inline code
                                 content = content.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
+                                
+                                // Bold text
+                                content = content.replace(/\\*\\*([^\\*]+)\\*\\*/g, '<strong>$1</strong>');
+                                
+                                // Italic text
+                                content = content.replace(/\\*([^\\*]+)\\*/g, '<em>$1</em>');
+                                
+                                // Lists
+                                content = content.replace(/^- (.+)$/gm, '<li>$1</li>');
+                                content = content.replace(/(<li>.+<\/li>)\n(<li>.+<\/li>)/g, '$1$2');
+                                content = content.replace(/(<li>.+<\/li>)+/g, '<ul>$&</ul>');
+                                
                                 contentDiv.innerHTML = content;
                             } else {
                                 contentDiv.textContent = msg.content;
@@ -521,13 +779,21 @@ class ChatViewProvider implements vscode.WebviewViewProvider {
                             timeDiv.className = 'message-time';
                             timeDiv.textContent = formatTime(msg.timestamp);
                             
+                            messageDiv.appendChild(headerDiv);
                             messageDiv.appendChild(contentDiv);
                             messageDiv.appendChild(timeDiv);
-                            chatMessages.appendChild(messageDiv);
+                            
+                            if (currentGroup) {
+                                currentGroup.appendChild(messageDiv);
+                            } else {
+                                chatMessages.appendChild(messageDiv);
+                            }
                         });
                         
                         // Scroll to bottom
-                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                        setTimeout(() => {
+                            chatMessages.scrollTop = chatMessages.scrollHeight;
+                        }, 100);
                     }
                     
                     // Listen for messages
@@ -565,45 +831,171 @@ class AiTutorTreeDataProvider implements vscode.TreeDataProvider<AiTutorTreeItem
     }
 
     getChildren(element?: AiTutorTreeItem): AiTutorTreeItem[] {
-        if (element) return [];
         const { isActive, proficiency } = this.getState();
         
+        // If this is a category item, return its children
+        if (element && element.contextValue === 'category') {
+            switch (element.id) {
+                case 'settings':
+                    return [
+                        new AiTutorTreeItem(
+                            `Status: ${isActive ? 'Active' : 'Inactive'}`,
+                            'ai-coding-tutor.toggleActivation',
+                            {
+                                icon: isActive ? 'check' : 'circle-slash',
+                                description: isActive ? 'Enabled' : 'Disabled',
+                                tooltip: `Click to ${isActive ? 'disable' : 'enable'} AI Coding Tutor`,
+                                contextValue: 'setting'
+                            }
+                        ),
+                        new AiTutorTreeItem(
+                            `Proficiency Level`,
+                            'ai-coding-tutor.selectLevel',
+                            {
+                                icon: 'mortar-board',
+                                description: proficiency.charAt(0).toUpperCase() + proficiency.slice(1),
+                                tooltip: 'Change your proficiency level to adjust AI explanations',
+                                contextValue: 'setting'
+                            }
+                        )
+                    ];
+                case 'actions':
+                    return [
+                        new AiTutorTreeItem(
+                            'Ask a Question',
+                            'ai-coding-tutor.askQuery',
+                            {
+                                icon: 'comment-discussion',
+                                tooltip: 'Ask the AI tutor a question about your code',
+                                contextValue: 'action'
+                            }
+                        ),
+                        new AiTutorTreeItem(
+                            'Analyze Current File',
+                            'ai-coding-tutor.analyzeCode',
+                            {
+                                icon: 'microscope',
+                                tooltip: 'Analyze the current file for suggestions',
+                                contextValue: 'action'
+                            }
+                        ),
+                        new AiTutorTreeItem(
+                            'Clear Suggestions',
+                            'ai-coding-tutor.clearSuggestions',
+                            {
+                                icon: 'clear-all',
+                                tooltip: 'Clear all current suggestions',
+                                contextValue: 'action'
+                            }
+                        ),
+                        new AiTutorTreeItem(
+                            'Export Chat History',
+                            'ai-coding-tutor.exportChatHistory',
+                            {
+                                icon: 'save-all',
+                                tooltip: 'Export your conversation history as markdown',
+                                contextValue: 'action'
+                            }
+                        )
+                    ];
+                case 'help':
+                    return [
+                        new AiTutorTreeItem(
+                            'View Tutorial',
+                            'ai-coding-tutor.showTutorial',
+                            {
+                                icon: 'book',
+                                tooltip: 'Open the tutorial to learn how to use AI Coding Tutor',
+                                contextValue: 'help'
+                            }
+                        )
+                    ];
+                default:
+                    return [];
+            }
+        }
+        
+        // Root level - return categories
         return [
             new AiTutorTreeItem(
-                `Status: ${isActive ? 'Active' : 'Inactive'}`, 
-                'ai-coding-tutor.toggleActivation', 
-                isActive ? 'check' : 'circle-slash'
+                'Settings',
+                '',
+                {
+                    id: 'settings',
+                    icon: 'gear',
+                    collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+                    contextValue: 'category',
+                    tooltip: 'Configure AI Coding Tutor settings'
+                }
             ),
             new AiTutorTreeItem(
-                `Level: ${proficiency}`, 
-                'ai-coding-tutor.selectLevel', 
-                'mortar-board'
+                'Actions',
+                '',
+                {
+                    id: 'actions',
+                    icon: 'tools',
+                    collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+                    contextValue: 'category',
+                    tooltip: 'Available AI Coding Tutor actions'
+                }
             ),
             new AiTutorTreeItem(
-                'Ask a Question', 
-                'ai-coding-tutor.askQuery', 
-                'comment-discussion'
-            ),
-            new AiTutorTreeItem(
-                'Analyze Current File', 
-                'ai-coding-tutor.analyzeCode', 
-                'microscope'
-            ),
-            new AiTutorTreeItem(
-                'Clear Suggestions', 
-                'ai-coding-tutor.clearSuggestions', 
-                'clear-all'
-            ),
+                'Help',
+                '',
+                {
+                    id: 'help',
+                    icon: 'question',
+                    collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+                    contextValue: 'category',
+                    tooltip: 'Get help with AI Coding Tutor'
+                }
+            )
         ];
     }
 }
 
 // Tree item for sidebar
 class AiTutorTreeItem extends vscode.TreeItem {
-    constructor(label: string, commandId: string, icon?: string) {
-        super(label, vscode.TreeItemCollapsibleState.None);
-        this.command = { command: commandId, title: label };
-        if (icon) this.iconPath = new vscode.ThemeIcon(icon);
+    constructor(
+        label: string,
+        commandId: string,
+        options?: {
+            id?: string;
+            icon?: string;
+            description?: string;
+            tooltip?: string;
+            contextValue?: string;
+            collapsibleState?: vscode.TreeItemCollapsibleState;
+        }
+    ) {
+        super(
+            label, 
+            options?.collapsibleState || vscode.TreeItemCollapsibleState.None
+        );
+        
+        if (commandId) {
+            this.command = { command: commandId, title: label };
+        }
+        
+        if (options?.icon) {
+            this.iconPath = new vscode.ThemeIcon(options.icon);
+        }
+        
+        if (options?.id) {
+            this.id = options.id;
+        }
+        
+        if (options?.description) {
+            this.description = options.description;
+        }
+        
+        if (options?.tooltip) {
+            this.tooltip = options.tooltip;
+        }
+        
+        if (options?.contextValue) {
+            this.contextValue = options.contextValue;
+        }
     }
 }
 
@@ -1573,99 +1965,354 @@ function getTutorialHtml(): string {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>AI Coding Tutor Tutorial</title>
         <style>
+            :root {
+                --spacing-xs: 4px;
+                --spacing-sm: 8px;
+                --spacing-md: 16px;
+                --spacing-lg: 24px;
+                --spacing-xl: 32px;
+                --border-radius: 8px;
+                --transition-speed: 0.2s;
+            }
+            
             body {
                 font-family: var(--vscode-font-family);
-                padding: 20px;
+                padding: var(--spacing-xl);
+                margin: 0;
+                color: var(--vscode-foreground);
+                line-height: 1.6;
+                font-size: 14px;
+                max-width: 900px;
+                margin: 0 auto;
             }
-            h1, h2 {
+            
+            h1, h2, h3 {
                 color: var(--vscode-editor-foreground);
+                margin-top: var(--spacing-xl);
+                margin-bottom: var(--spacing-md);
+                font-weight: 600;
+            }
+            
+            h1 {
+                font-size: 28px;
                 border-bottom: 1px solid var(--vscode-panel-border);
-                padding-bottom: 10px;
+                padding-bottom: var(--spacing-md);
+                margin-top: 0;
             }
-            .feature {
-                margin-bottom: 30px;
+            
+            h2 {
+                font-size: 20px;
+                border-bottom: 1px solid var(--vscode-panel-border);
+                padding-bottom: var(--spacing-sm);
             }
-            .feature h3 {
-                margin-bottom: 5px;
+            
+            h3 {
+                font-size: 16px;
                 color: var(--vscode-textLink-foreground);
             }
-            .steps {
-                margin-left: 20px;
+            
+            p {
+                margin-bottom: var(--spacing-md);
             }
-            .step {
-                margin-bottom: 10px;
+            
+            .container {
+                display: flex;
+                flex-direction: column;
+                gap: var(--spacing-xl);
             }
-            .command {
+            
+            .header {
+                display: flex;
+                align-items: center;
+                gap: var(--spacing-md);
+                margin-bottom: var(--spacing-lg);
+            }
+            
+            .header-icon {
+                font-size: 32px;
+                color: var(--vscode-textLink-foreground);
+            }
+            
+            .header-text {
+                flex: 1;
+            }
+            
+            .feature-section {
+                margin-bottom: var(--spacing-xl);
+            }
+            
+            .feature {
+                margin-bottom: var(--spacing-lg);
+                padding: var(--spacing-md);
+                border-radius: var(--border-radius);
                 background-color: var(--vscode-editor-background);
                 border: 1px solid var(--vscode-panel-border);
-                padding: 5px 10px;
-                border-radius: 4px;
+                transition: transform var(--transition-speed) ease, box-shadow var(--transition-speed) ease;
+            }
+            
+            .feature:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            }
+            
+            .feature-header {
+                display: flex;
+                align-items: center;
+                gap: var(--spacing-md);
+                margin-bottom: var(--spacing-md);
+            }
+            
+            .feature-icon {
+                width: 32px;
+                height: 32px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background-color: var(--vscode-button-background);
+                color: var(--vscode-button-foreground);
+                border-radius: 50%;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            
+            .feature-title {
+                font-size: 16px;
+                font-weight: 600;
+                margin: 0;
+            }
+            
+            .steps {
+                margin-left: var(--spacing-xl);
+                margin-top: var(--spacing-md);
+            }
+            
+            .step {
+                margin-bottom: var(--spacing-md);
+                position: relative;
+                padding-left: var(--spacing-lg);
+            }
+            
+            .step:before {
+                content: "";
+                position: absolute;
+                left: 0;
+                top: 8px;
+                width: 8px;
+                height: 8px;
+                background-color: var(--vscode-button-background);
+                border-radius: 50%;
+            }
+            
+            .command {
+                background-color: var(--vscode-textCodeBlock-background);
+                border: 1px solid var(--vscode-panel-border);
+                padding: var(--spacing-sm) var(--spacing-md);
+                border-radius: var(--border-radius);
                 font-family: var(--vscode-editor-font-family);
+                font-size: 13px;
+                display: inline-block;
+                margin: var(--spacing-xs) 0;
+            }
+            
+            .proficiency-levels {
+                display: flex;
+                gap: var(--spacing-lg);
+                margin-top: var(--spacing-lg);
+                flex-wrap: wrap;
+            }
+            
+            .proficiency-card {
+                flex: 1;
+                min-width: 200px;
+                padding: var(--spacing-md);
+                border-radius: var(--border-radius);
+                background-color: var(--vscode-editor-background);
+                border: 1px solid var(--vscode-panel-border);
+            }
+            
+            .proficiency-card h4 {
+                margin-top: 0;
+                margin-bottom: var(--spacing-sm);
+                color: var(--vscode-textLink-foreground);
+                font-size: 15px;
+            }
+            
+            .proficiency-card p {
+                margin: 0;
+                font-size: 13px;
+                color: var(--vscode-descriptionForeground);
+            }
+            
+            .help-section {
+                background-color: var(--vscode-editor-background);
+                border: 1px solid var(--vscode-panel-border);
+                border-radius: var(--border-radius);
+                padding: var(--spacing-lg);
+                margin-top: var(--spacing-xl);
+            }
+            
+            .help-section h2 {
+                margin-top: 0;
+                border-bottom: none;
+                padding-bottom: 0;
+            }
+            
+            .help-links {
+                display: flex;
+                gap: var(--spacing-lg);
+                flex-wrap: wrap;
+                margin-top: var(--spacing-lg);
+            }
+            
+            .help-link {
+                flex: 1;
+                min-width: 200px;
+                padding: var(--spacing-md);
+                background-color: var(--vscode-button-background);
+                color: var(--vscode-button-foreground);
+                border-radius: var(--border-radius);
+                text-align: center;
+                text-decoration: none;
+                font-weight: 500;
+                transition: background-color var(--transition-speed) ease;
+            }
+            
+            .help-link:hover {
+                background-color: var(--vscode-button-hoverBackground);
+            }
+            
+            .footer {
+                margin-top: var(--spacing-xl);
+                padding-top: var(--spacing-lg);
+                border-top: 1px solid var(--vscode-panel-border);
+                text-align: center;
+                color: var(--vscode-descriptionForeground);
             }
         </style>
     </head>
     <body>
-        <h1>Welcome to AI Coding Tutor</h1>
-        <p>This tutorial will help you get started with the AI Coding Tutor extension.</p>
-        
-        <div class="feature">
-            <h2>Proficiency Levels</h2>
-            <p>The extension provides three levels of assistance to match your experience:</p>
-            <ul>
-                <li><strong>Novice:</strong> Simple explanations focused on basics</li>
-                <li><strong>Medium:</strong> More detailed insights with some advanced concepts</li>
-                <li><strong>Expert:</strong> In-depth technical explanations</li>
-            </ul>
-            <p>To change your level, click on the status bar icon or use the command:</p>
-            <div class="command">AI Coding Tutor: Select Proficiency Level</div>
+        <div class="container">
+            <div class="header">
+                <div class="header-icon">🎓</div>
+                <div class="header-text">
+                    <h1>Welcome to AI Coding Tutor</h1>
+                    <p>Your personal AI assistant for learning and improving your coding skills. This tutorial will help you get started with the AI Coding Tutor extension.</p>
+                </div>
+            </div>
+            
+            <div class="feature-section">
+                <h2>Proficiency Levels</h2>
+                <p>The extension adapts to your experience level, providing explanations that match your understanding:</p>
+                
+                <div class="proficiency-levels">
+                    <div class="proficiency-card">
+                        <h4>Novice</h4>
+                        <p>Simple explanations focused on fundamentals with beginner-friendly terminology and examples.</p>
+                    </div>
+                    
+                    <div class="proficiency-card">
+                        <h4>Medium</h4>
+                        <p>Balanced explanations with more technical details and some advanced concepts for intermediate developers.</p>
+                    </div>
+                    
+                    <div class="proficiency-card">
+                        <h4>Expert</h4>
+                        <p>In-depth technical explanations with comprehensive details and advanced programming concepts.</p>
+                    </div>
+                </div>
+                
+                <p>To change your level, click on the status bar icon or use the command:</p>
+                <div class="command">AI Coding Tutor: Select Proficiency Level</div>
+            </div>
+            
+            <div class="feature-section">
+                <h2>Key Features</h2>
+                
+                <div class="feature">
+                    <div class="feature-header">
+                        <div class="feature-icon">1</div>
+                        <h3 class="feature-title">Get Code Suggestions</h3>
+                    </div>
+                    <p>Receive intelligent suggestions to improve your code quality, performance, and readability.</p>
+                    <div class="steps">
+                        <div class="step">Right-click on a line of code and select "AI Coding Tutor: Get Suggestion"</div>
+                        <div class="step">Or click on a CodeLens suggestion that appears above your code</div>
+                        <div class="step">Review the suggestion and apply it with a single click if you find it helpful</div>
+                    </div>
+                </div>
+                
+                <div class="feature">
+                    <div class="feature-header">
+                        <div class="feature-icon">2</div>
+                        <h3 class="feature-title">Analyze Entire File</h3>
+                    </div>
+                    <p>Get a comprehensive analysis of your code file with multiple improvement suggestions.</p>
+                    <div class="steps">
+                        <div class="step">Use the command: <span class="command">AI Coding Tutor: Analyze Code</span></div>
+                        <div class="step">Or click the analyze button in the sidebar</div>
+                        <div class="step">Review the list of suggestions and navigate to each one with a click</div>
+                    </div>
+                </div>
+                
+                <div class="feature">
+                    <div class="feature-header">
+                        <div class="feature-icon">3</div>
+                        <h3 class="feature-title">Ask Questions</h3>
+                    </div>
+                    <p>Have a conversation with the AI tutor about your code or programming concepts.</p>
+                    <div class="steps">
+                        <div class="step">Open the "Ask Questions" panel in the sidebar</div>
+                        <div class="step">Type your question and press Enter</div>
+                        <div class="step">The AI will respond with explanations, examples, and code snippets</div>
+                    </div>
+                </div>
+                
+                <div class="feature">
+                    <div class="feature-header">
+                        <div class="feature-icon">4</div>
+                        <h3 class="feature-title">Explain Selected Code</h3>
+                    </div>
+                    <p>Get detailed explanations of specific code sections to understand how they work.</p>
+                    <div class="steps">
+                        <div class="step">Select code you want explained</div>
+                        <div class="step">Right-click and choose "AI Coding Tutor: Explain Code"</div>
+                        <div class="step">Review the explanation in the chat panel</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="help-section">
+                <h2>Getting Help</h2>
+                <p>If you have any questions or issues with the extension, there are several ways to get help:</p>
+                
+                <div class="help-links">
+                    <a href="#" class="help-link" onclick="vscode.postMessage({command: 'openDocumentation'})">
+                        Documentation
+                    </a>
+                    <a href="#" class="help-link" onclick="vscode.postMessage({command: 'openIssues'})">
+                        Report Issues
+                    </a>
+                    <a href="#" class="help-link" onclick="vscode.postMessage({command: 'askHelp'})">
+                        Ask the AI
+                    </a>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p>AI Coding Tutor v1.0.0 | Helping developers learn and grow</p>
+            </div>
         </div>
         
-        <div class="feature">
-            <h2>Key Features</h2>
+        <script>
+            const vscode = acquireVsCodeApi();
             
-            <div class="feature">
-                <h3>1. Get code suggestions</h3>
-                <div class="steps">
-                    <div class="step">Right-click on a line of code and select "AI Coding Tutor: Get Suggestion"</div>
-                    <div class="step">Or click on a CodeLens suggestion that appears above your code</div>
-                </div>
-            </div>
-            
-            <div class="feature">
-                <h3>2. Analyze entire file</h3>
-                <div class="steps">
-                    <div class="step">Use the command: <span class="command">AI Coding Tutor: Analyze Code</span></div>
-                    <div class="step">Or click the analyze button in the sidebar</div>
-                </div>
-            </div>
-            
-            <div class="feature">
-                <h3>3. Ask questions</h3>
-                <div class="steps">
-                    <div class="step">Open the "Ask Questions" panel in the sidebar</div>
-                    <div class="step">Type your question and press Enter</div>
-                </div>
-            </div>
-            
-            <div class="feature">
-                <h3>4. Explain selected code</h3>
-                <div class="steps">
-                    <div class="step">Select code you want explained</div>
-                    <div class="step">Right-click and choose "AI Coding Tutor: Explain Code"</div>
-                </div>
-            </div>
-        </div>
-        
-        <h2>Getting Help</h2>
-        <p>If you have any questions or issues, you can:</p>
-        <ul>
-            <li>Check the README file for detailed documentation</li>
-            <li>Submit issues on the GitHub repository</li>
-            <li>Ask the AI assistant itself for help using the extension</li>
-        </ul>
-        
-        <h2>Happy Coding!</h2>
-        <p>We hope this extension helps you learn and improve your coding skills.</p>
+            // Handle link clicks
+            document.addEventListener('click', (e) => {
+                if (e.target.tagName === 'A' && e.target.getAttribute('onclick')) {
+                    e.preventDefault();
+                }
+            });
+        </script>
     </body>
     </html>`;
 }
