@@ -357,13 +357,17 @@ export async function sendFeedbackToBackend(queryId: string, isPositive: boolean
     try {
         console.log(`Sending ${isPositive ? 'positive' : 'negative'} feedback for query ${queryId} to ${url}`);
         
-        // Updated payload format to match backend expectations
+        // Updated payload format to match backend expectations:
+        // FeedbackRequest struct {
+        //     QueryID  string `json:"id" binding:"required"`
+        //     Feedback string `json:"feedback" binding:"required"`
+        // }
         const response = await fetchWithRetry(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-                query_id: queryId,  // Changed from queryId to query_id
-                feedback_type: isPositive ? 'positive' : 'negative'  // Changed from feedback to feedback_type
+                id: queryId,  // Using "id" instead of "query_id" to match backend
+                feedback: isPositive ? 'positive' : 'negative'  // Using "feedback" instead of "feedback_type"
             })
         }, 2, 500); // Retry twice with short delay for feedback
         

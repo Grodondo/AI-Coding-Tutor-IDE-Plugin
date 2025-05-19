@@ -4,9 +4,12 @@
 
 import * as vscode from 'vscode';
 import { ChatMessage } from '../types';
+import { fetchQueryResponse, sendFeedbackToBackend } from '../api/backendService';
+import { parseResponseForCodeChanges, showCodeChangeSuggestions } from '../utils/codeUtils';
+import * as path from 'path';
 
 /**
- * Chat view provider for the Ask Questions panel 
+ * Chat view provider for the Ask Questions panel
  */
 export class ChatViewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
@@ -14,18 +17,35 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private _messages: ChatMessage[];
     private _isWebviewReady: boolean = false;
     private _isLoading: boolean = false;
-    private _messageQueue: ChatMessage[] = []; // Queue for messages when webview isn't ready yet
+    private _messageQueue: ChatMessage[] = [];
+    private _disposables: vscode.Disposable[] = [];
+    private _webviewReadyResolve?: () => void;
+    private _webviewReadyPromise: Promise<void>;
     
     constructor(extensionUri: vscode.Uri, initialMessages: ChatMessage[]) {
         this._extensionUri = extensionUri;
         this._messages = initialMessages;
+        
+        // Create a promise that resolves when the webview is ready
+        this._webviewReadyPromise = new Promise((resolve) => {
+            this._webviewReadyResolve = resolve;
+        });
     }
     
+    dispose() {
+        this._disposables.forEach(d => d.dispose());
+        this._disposables = [];
+    }
+    
+    /**
+     * Resolves the webview view
+     */
     resolveWebviewView(
         webviewView: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken
     ) {
+        console.log('DEBUG: Resolving webview view for chat');
         this._view = webviewView;
         
         webviewView.webview.options = {
@@ -33,621 +53,807 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             localResourceRoots: [this._extensionUri]
         };
         
+        // Set HTML content - This must be done before setting up message handlers
         webviewView.webview.html = this._getHtmlForWebview();
+        console.log('DEBUG: Webview HTML has been set');
         
-        // Important: Handle messages from the webview
-        webviewView.webview.onDidReceiveMessage(async (data) => {
-            console.log('Received message from webview:', data);
-            
-            if (data.type === 'sendQuestion') {
-                // Handle sending a new question from the webview
-                const question = data.value;
-                if (!question || typeof question !== 'string' || !question.trim()) {
-                    console.warn('Invalid question received');
-                    return;
-                }
-                
-                console.log('Sending question to AI via command:', question);
-                try {
-                    // Set loading state
-                    this.setLoading(true);
-                    
-                    // Execute command directly to expose real errors
-                    await vscode.commands.executeCommand('ai-coding-tutor.askQuery', question);
-                    
-                    console.log('Successfully executed askQuery command');
-                } catch (err) {
-                    console.error('Error executing askQuery command:', err);
-                    vscode.window.showErrorMessage('Failed to send question. Please try again.');
-                } finally {
-                    this.setLoading(false);
-                }
-            } else if (data.type === 'clearHistory') {
-                // Handle clearing chat history
-                this._messages = [];
-                this.update([]);
-                vscode.commands.executeCommand('ai-coding-tutor.clearChatHistory');
-            } else if (data.type === 'ready') {
-                console.log('Webview is ready, updating with current messages');
-                this._isWebviewReady = true;
-                // Process any queued messages
-                if (this._messageQueue.length > 0) {
-                    this.update(this._messageQueue);
-                    this._messageQueue = [];
-                } else {
-                    this.update(this._messages);
-                }
-                // Set loading state if needed
-                if (this._isLoading) {
-                    this.setLoading(this._isLoading);
-                }
-            } else if (data.type === 'applyCode') {
-                const codeContent = data.value;
-                const editor = vscode.window.activeTextEditor;
-                if (editor) {
-                    if (!editor.selection.isEmpty) {
-                        // Replace selected code with the suggestion
-                        editor.edit(editBuilder => {
-                            editBuilder.replace(editor.selection, codeContent);
-                        });
-                        vscode.window.showInformationMessage('Code applied successfully!');
-                    } else {
-                        vscode.window.showWarningMessage('Please select code to replace first');
-                    }
-                } else {
-                    vscode.window.showWarningMessage('No active editor found');
-                }
-            } else {
-                console.warn('Unknown message type received from webview:', data.type);
+        // Handle messages from the webview - proper binding is essential
+        const boundMessageHandler = this._handleWebviewMessage.bind(this);
+        const messageHandler = webviewView.webview.onDidReceiveMessage(message => {
+            console.log('DEBUG: Raw message received from webview:', message);
+            try {
+                return boundMessageHandler(message);
+            } catch (error) {
+                console.error('DEBUG: Error in message handler:', error);
+                return Promise.reject(error);
             }
         });
+        this._disposables.push(messageHandler);
         
-        // Show loading indicator until webview is ready
-        webviewView.title = "Ask Questions";
-        
-        // Add a timeout to check if webview becomes ready
-        setTimeout(() => {
-            if (!this._isWebviewReady) {
-                console.warn('Webview did not report ready status after timeout, forcing initialization');
-                this._isWebviewReady = true;
-                this.update(this._messages);
-            }
-        }, 2000); // Increased timeout to 2 seconds
-    }
-    
-    public update(messages: ChatMessage[]) {
-        this._messages = messages;
-        
-        if (!this._view) {
-            console.log('Cannot update chat: view not initialized');
-            this._messageQueue = [...messages]; // Queue messages for when view is ready
-            return;
+        // Try sending a test message to verify communication
+        try {
+            webviewView.webview.postMessage({
+                type: 'forceReady'
+            }).then(() => {
+                console.log('DEBUG: Initial message successfully sent to webview');
+            }, (error: Error) => {
+                console.error('DEBUG: Error sending initial message to webview:', error);
+            });
+        } catch (error) {
+            console.error('DEBUG: Exception sending initial message:', error);
         }
         
-        if (!this._isWebviewReady) {
-            console.log('Deferring message update: webview not ready yet');
-            this._messageQueue = [...messages]; // Queue messages for when webview is ready
+        // Manually force a ready message if one isn't received within timeout
+        setTimeout(() => {
+            if (!this._isWebviewReady) {
+                console.log('DEBUG: Manually forcing webview ready state after timeout');
+                this._handleReadyMessage();
+                
+                // Also try to send a force ready signal to the webview again
+                try {
+                    webviewView.webview.postMessage({
+                        type: 'forceReady'
+                    }).then(() => {
+                        console.log('DEBUG: Force ready message sent to webview');
+                    }, (error) => {
+                        console.error('DEBUG: Error sending force ready message:', error);
+                    });
+                } catch (error) {
+                    console.error('DEBUG: Exception sending force ready message:', error);
+                }
+            }
+        }, 1000);
+        
+        // Set title and mark setup complete
+        webviewView.title = "Ask Questions";
+        console.log('DEBUG: Webview setup complete');
+        
+        // Force refresh view with any existing messages once initialized
+        setTimeout(() => {
+            if (this._messages.length > 0) {
+                console.log('DEBUG: Force refreshing view with existing messages');
+                this._refreshView();
+            }
+        }, 1500);
+    }
+    
+    /**
+     * Force initialization of the webview if normal ready event fails
+     */
+    private _forceInitialize() {
+        if (!this._view) return;
+        
+        console.log('Forcing chat webview initialization');
+        this._isWebviewReady = true;
+        
+        // Resolve the ready promise if it hasn't been resolved yet
+        if (this._webviewReadyResolve) {
+            this._webviewReadyResolve();
+            this._webviewReadyResolve = undefined;
+        }
+        
+        // Process any queued messages
+        this._processQueuedMessages();
+    }
+    
+    /**
+     * Process any queued messages
+     */
+    private _processQueuedMessages() {
+        if (this._messageQueue.length > 0) {
+            console.log(`Processing ${this._messageQueue.length} queued messages`);
+            this.update(this._messageQueue);
+            this._messageQueue = [];
+        }
+    }
+    
+    /**
+     * Refresh the view with current messages
+     */
+    private _refreshView() {
+        if (this._messages.length > 0) {
+            this.update(this._messages);
+        }
+    }
+    
+    /**
+     * Shows the chat view and focuses it
+     */
+    public async showView() {
+        await vscode.commands.executeCommand('workbench.view.extension.aiTutorSidebar');
+        
+        if (!this._view) {
+            try {
+                await vscode.commands.executeCommand('aiTutorChat.focus');
+            } catch (error) {
+                console.error('Error focusing chat view:', error);
+            }
             return;
         }
         
         try {
-            console.log('Updating chat with messages:', messages.length);
-            
-            this._view.title = "Ask Questions";
-            this._view.webview.postMessage({ 
-                type: 'updateMessages', 
-                value: messages 
-            }).then(
-                success => {
-                    console.log('Message posted successfully to webview');
-                    // Ensure the panel is visible when messages update
-                    if (messages.length > 0 && messages[messages.length - 1].role === 'assistant') {
-                        this._view?.show(true); // true means preserve focus
-                    }
-                },
-                error => {
-                    console.error('Failed to post message to webview:', error);
-                    
-                    // If posting fails, try refreshing the webview
-                    if (this._view) {
-                        console.log('Attempting to refresh webview after post failure');
-                        this._view.webview.html = this._getHtmlForWebview();
-                        this._isWebviewReady = false;
-                        this._messageQueue = [...messages];
+            this._view.show(true);
+        } catch (error) {
+            console.error('Error showing chat view:', error);
+        }
+    }
+    
+    /**
+     * Handles messages from the webview
+     */
+    private async _handleWebviewMessage(message: any) {
+        console.log('DEBUG: Processing webview message:', message.type);
+        
+        switch (message.type) {
+            case 'ready':
+                console.log('DEBUG: Handling ready message');
+                await this._handleReadyMessage();
+                break;
+                
+            case 'sendQuestion':
+                console.log('DEBUG: Handling send question message:', message.value);
+                await this._handleSendQuestionMessage(message.value);
+                break;
+                
+            case 'clearHistory':
+                this._handleClearHistoryMessage();
+                break;
+                
+            case 'applyCode':
+                this._handleApplyCodeMessage(message.value);
+                break;
+                
+            case 'sendFeedback':
+                this._handleFeedbackMessage(message.queryId, message.isPositive);
+                break;
+                
+            case 'testConnection':
+                console.log('DEBUG: Received test connection message:', message.value);
+                // Send a response back to confirm communication is working
+                if (this._view && this._isWebviewReady) {
+                    try {
+                        await this._view.webview.postMessage({
+                            type: 'connectionTest',
+                            success: true,
+                            message: 'Connection confirmed at ' + new Date().toLocaleTimeString()
+                        });
+                        console.log('DEBUG: Sent connection confirmation back to webview');
+                    } catch (error) {
+                        console.error('DEBUG: Error sending connection confirmation:', error);
                     }
                 }
-            );
-        } catch (err) {
-            console.error('Error updating chat view:', err);
-            vscode.window.showErrorMessage('Failed to update chat view. Try refreshing the panel.');
+                break;
+                
+            default:
+                console.warn('Unknown message from chat webview:', message.type);
+        }
+    }
+    
+    /**
+     * Handle ready message from webview
+     */
+    private async _handleReadyMessage() {
+        console.log('Chat webview is ready');
+        this._isWebviewReady = true;
+        
+        // Resolve the ready promise
+        if (this._webviewReadyResolve) {
+            this._webviewReadyResolve();
+            this._webviewReadyResolve = undefined;
+        }
+        
+        // Process any queued messages
+        this._processQueuedMessages();
+    }
+    
+    /**
+     * Handle user question from webview
+     */
+    public async _handleSendQuestionMessage(question: string) {
+        console.log('DEBUG: Start processing question:', question);
+        if (!question || typeof question !== 'string' || !question.trim()) {
+            console.warn('Invalid question received from webview');
+            return;
+        }
+        
+        await this._sendQuestion(question);
+    }
+    
+    /**
+     * Handle clear history message from webview
+     */
+    private _handleClearHistoryMessage() {
+        this._messages = [];
+        this.update([]);
+        vscode.commands.executeCommand('ai-coding-tutor.clearChatHistory');
+    }
+    
+    /**
+     * Handle apply code message from webview
+     */
+    private _handleApplyCodeMessage(codeContent: string) {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showWarningMessage('No active editor found');
+            return;
+        }
+        
+        if (editor.selection.isEmpty) {
+            vscode.window.showWarningMessage('Please select code to replace first');
+            return;
+        }
+        
+        editor.edit(editBuilder => {
+            editBuilder.replace(editor.selection, codeContent);
+        }).then(success => {
+            if (success) {
+                vscode.window.showInformationMessage('Code applied successfully!');
+            } else {
+                vscode.window.showErrorMessage('Failed to apply code');
+            }
+        });
+    }
+    
+    /**
+     * Handle feedback message from webview
+     */
+    private _handleFeedbackMessage(queryId: string, isPositive: boolean) {
+        if (!queryId) {
+            console.warn('Missing query ID for feedback');
+            return;
+        }
+        
+        sendFeedbackToBackend(queryId, isPositive)
+            .then(() => console.log(`Feedback sent: ${isPositive ? 'positive' : 'negative'}`))
+            .catch(error => console.error('Error sending feedback:', error));
+    }
+    
+    /**
+     * Sends a question to the backend
+     */
+    public async _sendQuestion(question: string) {
+        // Get code context from active editor
+        const editor = vscode.window.activeTextEditor;
+        let codeContext = '';
+        let fileInfo = '';
+        
+        if (editor) {
+            if (!editor.selection.isEmpty) {
+                codeContext = editor.document.getText(editor.selection);
+            } else {
+                const fullText = editor.document.getText();
+                codeContext = fullText.length <= 10000 ? fullText : fullText.substring(0, 10000) + '\n\n[File truncated due to size...]';
+            }
             
-            // Reset webview on serious error
+            fileInfo = `\nFile: ${path.basename(editor.document.uri.fsPath)}\nLanguage: ${editor.document.languageId}`;
+        }
+        
+        // Add user message to chat
+        const userMessage: ChatMessage = {
+            role: 'user',
+            content: question,
+            timestamp: Date.now(),
+            codeContext
+        };
+        
+        this._messages.push(userMessage);
+        this.update(this._messages);
+        
+        // Set loading state
+        this.setLoading(true);
+        
+        try {
+            // Send the query to the backend
+            const fullQuery = codeContext ? `${question}\n\nCode context:${fileInfo}\n${codeContext}` : question;
+            
+            // Get user's proficiency level from VS Code settings
+            const proficiency = vscode.workspace.getConfiguration('aiCodingTutor').get('proficiencyLevel', 'medium');
+            
+            const { id, response } = await fetchQueryResponse(fullQuery, proficiency);
+            
+            // Parse response for code changes if editor is available
+            const parsedResponse = editor ? 
+                await parseResponseForCodeChanges(response, editor) : 
+                { message: response, codeChanges: [] };
+            
+            // Add assistant message to chat
+            const assistantMessage: ChatMessage = {
+                role: 'assistant',
+                content: parsedResponse.message,
+                timestamp: Date.now(),
+                queryId: id
+            };
+            
+            this._messages.push(assistantMessage);
+            this.update(this._messages);
+            
+            // Show code changes if available
+            if (editor && parsedResponse.codeChanges && parsedResponse.codeChanges.length > 0) {
+                await showCodeChangeSuggestions(editor, parsedResponse.codeChanges);
+            }
+        } catch (error) {
+            // Handle error
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            console.error('Error sending question:', errorMessage);
+            
+            // Add error message to chat
+            this._messages.push({
+                role: 'assistant',
+                content: `⚠️ Error: ${errorMessage}`,
+                timestamp: Date.now()
+            });
+            
+            this.update(this._messages);
+            vscode.window.showErrorMessage(`Query failed: ${errorMessage}`);
+        } finally {
+            // Turn off loading state
+            this.setLoading(false);
+        }
+    }
+    
+    /**
+     * Update chat messages
+     */
+    public async update(messages: ChatMessage[]) {
+        this._messages = messages;
+        
+        // Wait for webview to be ready
+        if (!this._view || !this._isWebviewReady) {
+            this._messageQueue = [...messages];
+            return;
+        }
+        
+        try {
+            await this._view.webview.postMessage({
+                type: 'updateMessages',
+                value: messages
+            });
+        } catch (error) {
+            console.error('Error updating chat view:', error);
+            this._messageQueue = [...messages];
+            
+            // Reset webview if it's available
             if (this._view) {
                 this._view.webview.html = this._getHtmlForWebview();
                 this._isWebviewReady = false;
-                this._messageQueue = [...messages];
+                
+                // Create a new ready promise
+                this._webviewReadyPromise = new Promise((resolve) => {
+                    this._webviewReadyResolve = resolve;
+                });
             }
         }
     }
     
+    /**
+     * Set loading state
+     */
     public setLoading(isLoading: boolean) {
         this._isLoading = isLoading;
         
         if (!this._view || !this._isWebviewReady) {
-            console.log('Cannot set loading state: view not initialized or webview not ready');
             return;
         }
         
-        this._view.webview.postMessage({ 
-            type: 'setLoading', 
-            value: isLoading 
-        }).then(
-            () => console.log('Loading state updated'),
-            (error: Error) => console.error('Error setting loading state:', error)
-        );
+        try {
+            this._view.webview.postMessage({
+                type: 'setLoading',
+                value: isLoading
+            }).then(undefined, error => {
+                console.error('Error setting loading state:', error);
+            });
+        } catch (error) {
+            console.error('Error setting loading state:', error);
+        }
     }
     
+    /**
+     * Get resource URI for webview
+     */
     private _getResourceUri(filename: string): vscode.Uri {
         return this._view?.webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'media', filename)
         ) || vscode.Uri.parse('');
     }
     
-    private _getHtmlForWebview() {
-        return `<!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>AI Coding Tutor Chat</title>
-            <style>
-                body {
-                    padding: 0;
-                    margin: 0;
-                    font-family: var(--vscode-font-family);
-                    color: var(--vscode-foreground);
-                    background-color: var(--vscode-editor-background);
-                    display: flex;
-                    flex-direction: column;
-                    height: 100vh;
-                }
-                
-                .header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    padding: 8px 12px;
-                    border-bottom: 1px solid var(--vscode-panel-border);
-                    background-color: var(--vscode-tab-activeBackground);
-                }
-                
-                .header-title {
-                    font-weight: bold;
-                }
-                
-                .header-button {
-                    background: transparent;
-                    border: none;
-                    cursor: pointer;
-                    color: var(--vscode-button-foreground);
-                    background-color: var(--vscode-button-background);
-                    padding: 4px 8px;
-                    border-radius: 2px;
-                }
-                
-                .messages {
-                    flex: 1;
-                    overflow-y: auto;
-                    padding: 12px;
-                }
-                
-                .message {
-                    margin-bottom: 16px;
-                    padding: 8px 12px;
-                    border-radius: 4px;
-                    max-width: 80%;
-                }
-                
-                .user {
-                    background-color: var(--vscode-button-background);
-                    color: var(--vscode-button-foreground);
-                    align-self: flex-end;
-                    margin-left: auto;
-                }
-                
-                .ai {
-                    background-color: var(--vscode-editor-inactiveSelectionBackground);
-                    color: var(--vscode-editor-foreground);
-                }
-                
-                .message-container {
-                    display: flex;
-                    flex-direction: column;
-                }
-                
-                .message-header {
-                    font-weight: bold;
-                    margin-bottom: 4px;
-                }
-                
-                .message-time {
-                    font-size: 0.8em;
-                    opacity: 0.8;
-                    margin-top: 4px;
-                    text-align: right;
-                }
-                
-                .input-container {
-                    display: flex;
-                    flex-direction: column;
-                    padding: 8px;
-                    border-top: 1px solid var(--vscode-panel-border);
-                }
-                
-                #questionInput {
-                    flex: 1;
-                    padding: 8px;
-                    border: 1px solid var(--vscode-input-border);
-                    background-color: var(--vscode-input-background);
-                    color: var(--vscode-input-foreground);
-                    resize: none;
-                }
-                
-                #sendButton {
-                    margin-left: 8px;
-                    background-color: var(--vscode-button-background);
-                    color: var(--vscode-button-foreground);
-                    border: none;
-                    padding: 0 12px;
-                    cursor: pointer;
-                }
-
-                pre {
-                    background-color: var(--vscode-textCodeBlock-background);
-                    padding: 8px;
-                    border-radius: 3px;
-                    overflow-x: auto;
-                    white-space: pre-wrap;
-                }
-                
-                code {
-                    font-family: var(--vscode-editor-font-family);
-                }
-
-                .empty-state {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    height: 100%;
-                    text-align: center;
-                    color: var(--vscode-descriptionForeground);
-                }
-
-                .empty-state-icon {
-                    font-size: 48px;
-                    margin-bottom: 16px;
-                }
-                
-                .debug-info {
-                    font-size: 10px;
-                    color: #888;
-                    margin-top: 4px;
-                    display: none;
-                }
-                
-                .message-content img {
-                    max-width: 100%;
-                }
-                
-                .loading-indicator {
-                    display: flex;
-                    align-items: center;
-                    padding: 8px;
-                    color: var(--vscode-descriptionForeground);
-                }
-                
-                .loading-spinner {
-                    border: 2px solid var(--vscode-editor-background);
-                    border-top: 2px solid var(--vscode-button-background);
-                    border-radius: 50%;
-                    width: 16px;
-                    height: 16px;
-                    animation: spin 1s linear infinite;
-                    margin-right: 8px;
-                }
-                
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-                
-                .message-actions {
-                    display: flex;
-                    justify-content: flex-end;
-                    margin-top: 4px;
-                }
-                
-                .message-action-button {
-                    background: transparent;
-                    border: none;
-                    color: var(--vscode-descriptionForeground);
-                    cursor: pointer;
-                    font-size: 12px;
-                    padding: 2px 4px;
-                    margin-left: 8px;
-                }
-                
-                .message-action-button:hover {
-                    color: var(--vscode-button-foreground);
-                    background: var(--vscode-button-background);
-                    border-radius: 2px;
-                }
-                
-                .input-row {
-                    display: flex;
-                    align-items: center;
-                }
-                
-                /* Syntax highlighting for code */
-                code .token.keyword { color: var(--vscode-editor-foreground); font-weight: bold; }
-                code .token.string { color: var(--vscode-debugTokenExpression-string); }
-                code .token.number { color: var(--vscode-debugTokenExpression-number); }
-                code .token.boolean { color: var(--vscode-debugTokenExpression-boolean); }
-                code .token.comment { color: var(--vscode-editorLineNumber-foreground); font-style: italic; }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <div class="header-title">AI Coding Tutor Chat</div>
-                <button id="clearButton" class="header-button">Clear</button>
-            </div>
-            
-            <div id="chatMessages" class="messages"></div>
-            
-            <div class="input-container">
-                <div id="loadingIndicator" class="loading-indicator" style="display: none;">
-                    <div class="loading-spinner"></div>
-                    <div>AI is thinking...</div>
+    /**
+     * Get HTML for webview
+     */
+    private _getHtmlForWebview(): string {
+        // Get stylesheets
+        const styleUri = this._getResourceUri('chat-styles.css');
+        
+        // Simpler, more reliable template with inline scripts to debug issues
+        return /*html*/`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Coding Tutor Chat</title>
+    <link rel="stylesheet" href="${styleUri}">
+    <style>
+        /* Fallback styles in case the CSS file doesn't load */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            border-bottom: 1px solid #ccc;
+        }
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        .input-container {
+            padding: 10px;
+            border-top: 1px solid #ccc;
+        }
+        .input-row {
+            display: flex;
+            gap: 8px;
+        }
+        #questionInput {
+            flex: 1;
+            min-height: 36px;
+            padding: 8px;
+        }
+        button {
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+        .debug-info {
+            margin-top: 8px;
+            padding: 8px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-title">
+            <span>📚 AI Coding Tutor</span>
+        </div>
+        <div class="header-actions">
+            <button id="clearButton" type="button">Clear</button>
+        </div>
+    </div>
+    
+    <div id="chatMessages" class="messages">
+        <div class="empty-state">
+            <div style="text-align: center; padding: 20px;">
+                <div style="font-size: 32px; margin-bottom: 10px;">💬</div>
+                <div style="font-weight: bold; margin-bottom: 10px;">Welcome to AI Coding Tutor</div>
+                <div style="margin-bottom: 20px;">
+                    Ask questions about your code to get help with understanding, debugging, or optimizing it.
                 </div>
-                <div class="input-row">
-                <textarea id="questionInput" placeholder="Ask a coding question..." rows="2"></textarea>
-                <button id="sendButton">Send</button>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <button type="button" class="suggestion-item">How do I optimize this function?</button>
+                    <button type="button" class="suggestion-item">Explain how this code works</button>
+                    <button type="button" class="suggestion-item">Help me debug this error</button>
+                    <button type="button" class="suggestion-item">Suggest best practices for this code</button>
                 </div>
             </div>
+        </div>
+    </div>
+    
+    <div class="input-container">
+        <div id="loadingIndicator" style="display: none; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 16px; height: 16px; border: 2px solid #ccc; border-top-color: #333; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <div>AI is thinking...</div>
+            </div>
+        </div>
+        <div class="input-row">
+            <textarea id="questionInput" placeholder="Ask a coding question..." rows="1"></textarea>
+            <button id="sendButton" type="button">Send</button>
+        </div>
+        <div class="debug-info">
+            <div id="apiStatus">Initializing API connection...</div>
+            <div id="messageStatus"></div>
+            <button id="testApiButton" type="button" style="margin-top: 8px; font-size: 12px; padding: 4px 8px;">Test API Connection</button>
+        </div>
+    </div>
 
-            <script>
-                (function() {
-                    const vscode = acquireVsCodeApi();
-                    const chatMessages = document.getElementById('chatMessages');
-                    const questionInput = document.getElementById('questionInput');
-                    const sendButton = document.getElementById('sendButton');
-                    const clearButton = document.getElementById('clearButton');
-                    const loadingIndicator = document.getElementById('loadingIndicator');
+    <script>
+        (function() {
+            // Declare variables
+            let vsCodeApi;
+            const chatMessages = document.getElementById('chatMessages');
+            const questionInput = document.getElementById('questionInput');
+            const sendButton = document.getElementById('sendButton');
+            const clearButton = document.getElementById('clearButton');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const testApiButton = document.getElementById('testApiButton');
+            const messageStatus = document.getElementById('messageStatus');
+            const apiStatus = document.getElementById('apiStatus');
+            
+            // Initialize VS Code API
+            try {
+                console.log('DEBUG: Acquiring VS Code API');
+                vsCodeApi = acquireVsCodeApi();
+                apiStatus.textContent = '✅ VS Code API connected';
+                console.log('DEBUG: Successfully acquired VS Code API');
+            } catch (error) {
+                apiStatus.textContent = '❌ Failed to connect to VS Code API: ' + error.message;
+                console.error('DEBUG: Failed to acquire VS Code API', error);
+            }
+            
+            // Function to send message to the extension
+            function postMessageToExtension(message) {
+                console.log('DEBUG: Attempting to post message:', message);
+                
+                if (!vsCodeApi) {
+                    messageStatus.textContent = '❌ Cannot send message: VS Code API not available';
+                    console.error('DEBUG: Cannot send message, VS Code API not available');
+                    return false;
+                }
+                
+                try {
+                    vsCodeApi.postMessage(message);
+                    messageStatus.textContent = '✅ Message sent: ' + message.type;
+                    console.log('DEBUG: Message posted successfully', message);
+                    return true;
+                } catch (error) {
+                    messageStatus.textContent = '❌ Error sending message: ' + error.message;
+                    console.error('DEBUG: Error posting message:', error);
+                    return false;
+                }
+            }
+            
+            // Function to send a question
+            function sendMessage() {
+                const question = questionInput.value.trim();
+                
+                if (question) {
+                    console.log('DEBUG: Sending question:', question);
                     
-                    console.log('Chat initialized');
-                    
-                    // Function to send a message
-                    function sendMessage() {
-                        const question = questionInput.value.trim();
-                        
-                        if (question) {
-                            console.log('Sending question:', question);
-                            
-                            vscode.postMessage({
-                                type: 'sendQuestion',
-                                value: question
-                            });
-                            
-                            // Clear the input field
-                            questionInput.value = '';
-                        }
-                    }
-                    
-                    // Enter key handler (shift+enter for newline)
-                    questionInput.addEventListener('keydown', (event) => {
-                        if (event.key === 'Enter' && !event.shiftKey) {
-                            event.preventDefault();
-                            sendMessage();
-                        }
+                    const messageSent = postMessageToExtension({
+                        type: 'sendQuestion',
+                        value: question
                     });
                     
-                    // Button click handler
-                    sendButton.addEventListener('click', () => {
+                    if (messageSent) {
+                        // Clear the input field
+                        questionInput.value = '';
+                        questionInput.style.height = '36px';
+                        questionInput.focus();
+                    }
+                } else {
+                    console.log('DEBUG: Empty question, not sending');
+                }
+            }
+            
+            // Helper function to create a message element
+            function createMessageElement(message) {
+                const container = document.createElement('div');
+                container.className = message.role === 'user' ? 'message-container user-container' : 'message-container assistant-container';
+                
+                const messageEl = document.createElement('div');
+                messageEl.className = message.role === 'user' ? 'message user' : 'message assistant';
+                
+                const header = document.createElement('div');
+                header.className = 'message-header';
+                header.textContent = message.role === 'user' ? 'You' : 'AI Tutor';
+                
+                const content = document.createElement('div');
+                content.className = 'message-content';
+                content.textContent = message.content;
+                
+                const time = document.createElement('div');
+                time.className = 'message-time';
+                time.textContent = new Date(message.timestamp).toLocaleTimeString();
+                
+                messageEl.appendChild(header);
+                messageEl.appendChild(content);
+                messageEl.appendChild(time);
+                container.appendChild(messageEl);
+                
+                // Add feedback buttons for assistant messages
+                if (message.role === 'assistant' && message.queryId) {
+                    const actions = document.createElement('div');
+                    actions.className = 'message-actions';
+                    
+                    const thumbsUp = document.createElement('button');
+                    thumbsUp.type = 'button';
+                    thumbsUp.className = 'message-action-button';
+                    thumbsUp.innerHTML = '👍 Helpful';
+                    thumbsUp.onclick = () => sendFeedback(message.queryId, true);
+                    
+                    const thumbsDown = document.createElement('button');
+                    thumbsDown.type = 'button';
+                    thumbsDown.className = 'message-action-button';
+                    thumbsDown.innerHTML = '👎 Not helpful';
+                    thumbsDown.onclick = () => sendFeedback(message.queryId, false);
+                    
+                    actions.appendChild(thumbsUp);
+                    actions.appendChild(thumbsDown);
+                    container.appendChild(actions);
+                }
+                
+                return container;
+            }
+            
+            // Function to send feedback
+            function sendFeedback(queryId, isPositive) {
+                postMessageToExtension({
+                    type: 'sendFeedback',
+                    queryId: queryId,
+                    isPositive: isPositive
+                });
+            }
+            
+            // Function to update messages
+            function updateMessages(messages) {
+                chatMessages.innerHTML = '';
+                
+                if (messages && messages.length > 0) {
+                    messages.forEach(message => {
+                        chatMessages.appendChild(createMessageElement(message));
+                    });
+                    
+                    // Scroll to bottom
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                } else {
+                    // Show empty state
+                    chatMessages.innerHTML = 
+                        '<div class="empty-state">' +
+                        '<div style="text-align: center; padding: 20px;">' +
+                        '<div style="font-size: 32px; margin-bottom: 10px;">💬</div>' +
+                        '<div style="font-weight: bold; margin-bottom: 10px;">Welcome to AI Coding Tutor</div>' +
+                        '<div style="margin-bottom: 20px;">' +
+                        'Ask questions about your code to get help with understanding, debugging, or optimizing it.' +
+                        '</div>' +
+                        '<div style="display: flex; flex-direction: column; gap: 8px;">' +
+                        '<button type="button" class="suggestion-item">How do I optimize this function?</button>' +
+                        '<button type="button" class="suggestion-item">Explain how this code works</button>' +
+                        '<button type="button" class="suggestion-item">Help me debug this error</button>' +
+                        '<button type="button" class="suggestion-item">Suggest best practices for this code</button>' +
+                        '</div>' +
+                        '</div>' +
+                        '</div>';
+                    
+                    // Reattach event listeners to suggestion items
+                    document.querySelectorAll('.suggestion-item').forEach(item => {
+                        item.addEventListener('click', function() {
+                            questionInput.value = this.textContent;
+                            questionInput.focus();
+                        });
+                    });
+                }
+            }
+            
+            // Function to set up all event listeners
+            function setupEventListeners() {
+                // Send button
+                sendButton.addEventListener('click', function() {
+                    console.log('DEBUG: Send button clicked');
+                    sendMessage();
+                });
+                
+                // Enter key in textarea
+                questionInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        console.log('DEBUG: Enter key pressed');
+                        e.preventDefault();
                         sendMessage();
+                    }
+                });
+                
+                // Clear button
+                clearButton.addEventListener('click', function() {
+                    console.log('DEBUG: Clear button clicked');
+                    postMessageToExtension({ type: 'clearHistory' });
+                });
+                
+                // Test API button
+                testApiButton.addEventListener('click', function() {
+                    console.log('DEBUG: Test API button clicked');
+                    postMessageToExtension({
+                        type: 'testConnection',
+                        value: 'Testing connection at ' + new Date().toLocaleTimeString()
                     });
-                    
-                    // Clear button handler
-                    clearButton.addEventListener('click', () => {
-                        if (confirm('Clear all messages?')) {
-                            vscode.postMessage({
-                                type: 'clearHistory'
-                            });
-                        }
+                });
+                
+                // Suggestion items
+                document.querySelectorAll('.suggestion-item').forEach(function(item) {
+                    item.addEventListener('click', function() {
+                        console.log('DEBUG: Suggestion clicked:', this.textContent);
+                        questionInput.value = this.textContent;
+                        questionInput.focus();
                     });
+                });
+                
+                console.log('DEBUG: All event listeners set up successfully');
+            }
+            
+            // Handle messages from extension
+            function setupMessageHandler() {
+                window.addEventListener('message', function(event) {
+                    const message = event.data;
+                    console.log('DEBUG: Received message from extension:', message?.type);
                     
-                    // Format message time
-                    function formatTime(timestamp) {
-                        const date = new Date(timestamp);
-                        return date.toLocaleTimeString();
-                    }
-                    
-                    // HTML escape helper
-                    function escapeHtml(html) {
-                        const div = document.createElement('div');
-                        div.textContent = html;
-                        return div.innerHTML;
-                    }
-                    
-                    // Highlight code blocks
-                    function highlightCode() {
-                        document.querySelectorAll('pre code').forEach((block) => {
-                            // Simple syntax highlighting for common programming keywords
-                            const html = block.innerHTML
-                                .replace(/\\b(class|function|const|let|var|if|else|for|while|return|import|export|async|await)\\b/g, 
-                                        '<span class="token keyword">$1</span>')
-                                .replace(/('[^']*'|"[^"]*")/g, '<span class="token string">$1</span>')
-                                .replace(/\\b(\\d+)\\b/g, '<span class="token number">$1</span>')
-                                .replace(/\\b(true|false|null|undefined)\\b/g, '<span class="token boolean">$1</span>')
-                                .replace(/(\\/\\/[^\\n]*|\\/*[^]*?\\*\\/)/g, '<span class="token comment">$1</span>');
-                            
-                            block.innerHTML = html;
-                        });
-                    }
-                    
-                    // Render chat messages
-                    function renderMessages(messages) {
-                        console.log('Rendering messages:', messages?.length);
-                        chatMessages.innerHTML = '';
-                        
-                        if (!messages || messages.length === 0) {
-                            chatMessages.innerHTML = \`
-                                <div class="empty-state">
-                                    <div class="empty-state-icon">💬</div>
-                                    <div>Welcome to AI Coding Tutor</div>
-                                    <div>Ask questions about your code to get help</div>
-                                </div>
-                            \`;
-                            return;
-                        }
-                        
-                        const messageContainer = document.createElement('div');
-                        
-                        messages.forEach(msg => {
-                            const messageDiv = document.createElement('div');
-                            messageDiv.className = \`message \${msg.role === 'user' ? 'user' : 'ai'}\`;
-                            
-                            const headerDiv = document.createElement('div');
-                            headerDiv.className = 'message-header';
-                            headerDiv.textContent = msg.role === 'user' ? 'You' : 'AI Tutor';
-                            
-                            const contentDiv = document.createElement('div');
-                            contentDiv.className = 'message-content';
-                            
-                            // For AI responses, process markdown
-                            if (msg.role === 'assistant') {
-                                let content = msg.content || '';
-                                
-                                try {
-                                    // Process code blocks with language
-                                    content = content.replace(/\`\`\`([\\w]*)[\\s\\n]([\\s\\S]*?)\`\`\`/g, (match, lang, code) => {
-                                        return \`<pre><code class="language-\${lang}">\${escapeHtml(code)}</code></pre>\`;
-                                    });
-                                    
-                                    // Process inline code
-                                    content = content.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
-                                    
-                                    // Bold text
-                                    content = content.replace(/\\*\\*([^\\*]+)\\*\\*/g, '<strong>$1</strong>');
-                                    
-                                    // Italic text
-                                    content = content.replace(/\\*([^\\*]+)\\*/g, '<em>$1</em>');
-                                    
-                                    // Lists (simple implementation)
-                                    content = content.replace(/^- (.+)$/gm, '<li>$1</li>');
-                                    content = content.replace(/(<li>.+<\/li>)\n(<li>.+<\/li>)/g, '$1$2');
-                                    content = content.replace(/(<li>.+<\/li>)+/g, '<ul>$&</ul>');
-                                } catch (e) {
-                                    console.error('Error formatting message:', e);
-                                    content = msg.content;
-                                    
-                                    // Add debug info
-                                    const debugDiv = document.createElement('div');
-                                    debugDiv.className = 'debug-info';
-                                    debugDiv.textContent = \`Error parsing: \${e.message}\`;
-                                    contentDiv.appendChild(debugDiv);
-                                }
-                                
-                                contentDiv.innerHTML = content;
-                                
-                                // Add action buttons for AI responses
-                                const actionsDiv = document.createElement('div');
-                                actionsDiv.className = 'message-actions';
-                                
-                                // Copy button
-                                const copyButton = document.createElement('button');
-                                copyButton.className = 'message-action-button';
-                                copyButton.textContent = 'Copy';
-                                copyButton.title = 'Copy to clipboard';
-                                copyButton.addEventListener('click', () => {
-                                    navigator.clipboard.writeText(msg.content).then(() => {
-                                        copyButton.textContent = 'Copied!';
-                                        setTimeout(() => {
-                                            copyButton.textContent = 'Copy';
-                                        }, 2000);
-                                    });
-                                });
-                                actionsDiv.appendChild(copyButton);
-                                
-                                // Check if there are code blocks to add an "Apply" button
-                                if (content.includes('</code></pre>')) {
-                                    const applyButton = document.createElement('button');
-                                    applyButton.className = 'message-action-button';
-                                    applyButton.textContent = 'Apply Code';
-                                    applyButton.title = 'Apply code to editor';
-                                    applyButton.addEventListener('click', () => {
-                                        // Get the first code block
-                                        const codeMatch = msg.content.match(/\`\`\`(?:[\\w]*)[\\s\\n]([\\s\\S]*?)\`\`\`/);
-                                        if (codeMatch && codeMatch[1]) {
-                                            vscode.postMessage({
-                                                type: 'applyCode',
-                                                value: codeMatch[1].trim()
-                                            });
-                                        }
-                                    });
-                                    actionsDiv.appendChild(applyButton);
-                                }
-                                
-                                messageDiv.appendChild(actionsDiv);
-                            } else {
-                                // User message - simple text
-                                contentDiv.textContent = msg.content;
-                            }
-                            
-                            const timeDiv = document.createElement('div');
-                            timeDiv.className = 'message-time';
-                            timeDiv.textContent = formatTime(msg.timestamp);
-                            
-                            messageDiv.appendChild(headerDiv);
-                            messageDiv.appendChild(contentDiv);
-                            messageDiv.appendChild(timeDiv);
-                            
-                            messageContainer.appendChild(messageDiv);
-                        });
-                        
-                        chatMessages.appendChild(messageContainer);
-                        
-                        // Apply syntax highlighting
-                        setTimeout(highlightCode, 10);
-                        
-                        // Scroll to bottom
-                        setTimeout(() => {
-                            chatMessages.scrollTop = chatMessages.scrollHeight;
-                        }, 100);
-                    }
-                    
-                    // Listen for messages
-                    window.addEventListener('message', event => {
-                        const message = event.data;
-                        console.log('Received message from extension:', message);
-                        
+                    try {
                         switch (message.type) {
                             case 'updateMessages':
-                                renderMessages(message.value);
+                                messageStatus.textContent = '📩 Received messages update';
+                                updateMessages(message.value);
                                 break;
+                                
                             case 'setLoading':
-                                loadingIndicator.style.display = message.value ? 'flex' : 'none';
-                                sendButton.disabled = message.value;
-                                questionInput.disabled = message.value;
+                                const isLoading = message.value;
+                                loadingIndicator.style.display = isLoading ? 'block' : 'none';
+                                sendButton.disabled = isLoading;
+                                questionInput.disabled = isLoading;
+                                messageStatus.textContent = isLoading ? '⏳ Loading...' : '✅ Ready';
                                 break;
+                                
+                            case 'forceReady':
+                                console.log('DEBUG: Received force ready signal');
+                                messageStatus.textContent = '🔄 Force ready received, sending ready response';
+                                postMessageToExtension({ type: 'ready' });
+                                break;
+                                
+                            case 'connectionTest':
+                                messageStatus.textContent = '✅ Connection test successful: ' + message.message;
+                                break;
+                                
+                            default:
+                                console.warn('DEBUG: Unknown message type:', message?.type);
                         }
-                    });
+                    } catch (error) {
+                        console.error('DEBUG: Error handling message from extension:', error);
+                        messageStatus.textContent = '❌ Error handling message: ' + error.message;
+                    }
+                });
+            }
+            
+            // Initialize the webview
+            function initialize() {
+                console.log('DEBUG: Initializing webview');
+                
+                // Setup event listeners
+                setupEventListeners();
+                
+                // Setup message handler
+                setupMessageHandler();
+                
+                // Send ready message to extension
+                setTimeout(function() {
+                    console.log('DEBUG: Sending ready message to extension');
+                    postMessageToExtension({ type: 'ready' });
                     
-                    // Let the extension know we're ready
-                    vscode.postMessage({ type: 'ready' });
-                })();
-            </script>
-        </body>
-        </html>`;
+                    // Send ready message again after a delay in case it was missed
+                    setTimeout(function() {
+                        if (chatMessages.childElementCount === 1 && chatMessages.firstElementChild.className === 'empty-state') {
+                            console.log('DEBUG: Sending ready message again');
+                            postMessageToExtension({ type: 'ready' });
+                        }
+                    }, 1000);
+                }, 500);
+            }
+            
+            // Start initialization
+            window.addEventListener('DOMContentLoaded', initialize);
+            
+            // Also try to initialize immediately in case DOMContentLoaded already fired
+            if (document.readyState === 'interactive' || document.readyState === 'complete') {
+                console.log('DEBUG: Document already loaded, initializing now');
+                initialize();
+            }
+        })();
+    </script>
+</body>
+</html>`;
     }
 } 

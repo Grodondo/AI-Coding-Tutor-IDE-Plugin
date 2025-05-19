@@ -35,8 +35,12 @@ function handleQueryError(error: any, state: ExtensionState) {
         timestamp: Date.now()
     });
     
+    // Update the chat view and make sure it's visible
     state.chatViewProvider.update(state.chatHistory);
     state.updateChatHistory(state.chatHistory);
+    state.chatViewProvider.showView().catch((err: Error) => {
+        console.error('Failed to show chat view after error:', err);
+    });
     
     // Show error notification
     vscode.window.showErrorMessage(`Query failed: ${errorMessage}`);
@@ -121,97 +125,47 @@ export function registerCommands(
             
             if (!query) return;
             
-            // Always get current file context
-            let codeContext = '';
-            let fileInfo = '';
-            const editor = vscode.window.activeTextEditor;
+            // First show the chat view
+            await state.chatViewProvider.showView();
             
-            if (editor) {
-                // If there's a selection, use that as context
-                if (!editor.selection.isEmpty) {
-                    codeContext = editor.document.getText(editor.selection);
-                } 
-                // Otherwise use the entire file (up to a reasonable size)
-                else {
-                    const fullText = editor.document.getText();
-                    // Limit to 10,000 characters to avoid huge payloads
-                    codeContext = fullText.length <= 10000 ? fullText : fullText.substring(0, 10000) + '\n\n[File truncated due to size...]';
-                }
-                
-                // Add file info to provide better context
-                fileInfo = `\nFile: ${path.basename(editor.document.uri.fsPath)}\nLanguage: ${editor.document.languageId}`;
+            // Now directly send the query through the appropriate method
+            // This will bypass any webview message communication
+            const chatView = state.chatViewProvider;
+            
+            // Get code context from active editor
+            const editor = vscode.window.activeTextEditor;
+            let codeContext = '';
+            
+            if (editor && !editor.selection.isEmpty) {
+                codeContext = editor.document.getText(editor.selection);
             }
             
-            // Add to chat view - but don't display the code context in the UI
+            // Add user message directly to chat history
             const userMessage: ChatMessage = {
-                role: 'user' as 'user',
-                content: query, // Only display the question itself
+                role: 'user',
+                content: query,
                 timestamp: Date.now(),
-                codeContext: codeContext // Store separately
+                codeContext
             };
             
             state.chatHistory.push(userMessage);
-            
             state.chatViewProvider.update(state.chatHistory);
             state.updateChatHistory(state.chatHistory);
             
-            // Focus the chat view
-            vscode.commands.executeCommand('aiTutorChat.focus');
-            
-            // Show progress
-            vscode.window.withProgress({
-                location: vscode.ProgressLocation.Notification,
-                title: "AI Coding Tutor",
-                cancellable: false
-            }, async (progress) => {
-                progress.report({ message: "Processing your question..." });
-                
+            // Call the method directly
+            if (typeof chatView._sendQuestion === 'function') {
                 try {
-                    // Include file name and language in the context
-                    const fullQuery = codeContext ? `${query}\n\nCode context:${fileInfo}\n${codeContext}` : query;
-                    console.log('Sending query to backend:', query);
-                    
-                    const { id, response } = await fetchQueryResponse(fullQuery, state.proficiency);
-                    console.log('Received response from backend:', id);
-                    
-                    // Parse the response to look for code blocks
-                    const parsedResponse = await parseResponseForCodeChanges(response, editor);
-                    
-                    // Add to chat history
-                    const assistantMessage: ChatMessage = {
-                        role: 'assistant' as 'assistant',
-                        content: parsedResponse.message,
-                        timestamp: Date.now()
-                    };
-                    
-                    state.chatHistory.push(assistantMessage);
-                    
-                    // Update the chat view
-                    console.log('Updating chat view with response');
-                    state.chatViewProvider.update(state.chatHistory);
-                    state.updateChatHistory(state.chatHistory);
-                    
-                    // If there are code changes, display them inline
-                    if (parsedResponse.codeChanges && parsedResponse.codeChanges.length > 0 && editor) {
-                        await showCodeChangeSuggestions(editor, parsedResponse.codeChanges);
-                    }
-                    
-                    // Show feedback options
-                    const feedbackOptions = ['👍 Helpful', '👎 Not Helpful'];
-                    vscode.window.showInformationMessage(
-                        `AI Response received`,
-                        ...feedbackOptions
-                    ).then(async (feedback) => {
-                        if (feedback) {
-                            const isPositive = feedback === '👍 Helpful';
-                            await sendFeedbackToBackend(id, isPositive);
-                        }
-                    });
-                    
+                    console.log('Directly calling _sendQuestion method');
+                    await chatView._sendQuestion(query);
                 } catch (error) {
+                    console.error('Error calling _sendQuestion directly:', error);
                     handleQueryError(error, state);
                 }
-            });
+            } else {
+                // If _sendQuestion is not available (should not happen with our implementation)
+                console.error('_sendQuestion method not found on ChatViewProvider');
+                vscode.window.showErrorMessage('Could not send query to AI, internal error.');
+            }
         }),
         
         // Preview suggestion
@@ -456,11 +410,20 @@ export function registerCommands(
                 timestamp: Date.now()
             });
             
-            // Update chat UI and open the chat view
+            // 1. First update chat UI
             state.chatViewProvider.update(state.chatHistory);
             state.updateChatHistory(state.chatHistory);
+            
+            // 2. Set loading state
             state.chatViewProvider.setLoading(true);
-            vscode.commands.executeCommand('aiTutorChat.focus');
+            
+            // 3. Show the chat view and make sure it's focused BEFORE sending request
+            try {
+                console.log("Showing chat view before explain code query");
+                await state.chatViewProvider.showView();
+            } catch (error) {
+                console.error("Failed to show chat view before explain code query:", error);
+            }
             
             // Show progress indicator
             vscode.window.withProgress({
@@ -480,8 +443,20 @@ export function registerCommands(
                         timestamp: Date.now()
                     });
                     
+                    // Update chat
                     state.chatViewProvider.update(state.chatHistory);
                     state.updateChatHistory(state.chatHistory);
+                    
+                    // Turn off loading state
+                    state.chatViewProvider.setLoading(false);
+                    
+                    // Show the chat view AFTER receiving response
+                    try {
+                        console.log("Showing chat view after explain code response");
+                        await state.chatViewProvider.showView();
+                    } catch (error) {
+                        console.error("Failed to show chat view after explain code response:", error);
+                    }
                     
                     // Show feedback options
                     const feedbackOptions = ['👍 Helpful', '👎 Not Helpful'];
@@ -497,6 +472,7 @@ export function registerCommands(
                 } catch (error) {
                     handleQueryError(error, state);
                 } finally {
+                    // Always turn off loading state
                     state.chatViewProvider.setLoading(false);
                 }
             });
@@ -529,11 +505,20 @@ export function registerCommands(
                 timestamp: Date.now()
             });
             
-            // Update chat UI and open the chat view
+            // 1. First update chat UI
             state.chatViewProvider.update(state.chatHistory);
             state.updateChatHistory(state.chatHistory);
+            
+            // 2. Set loading state
             state.chatViewProvider.setLoading(true);
-            vscode.commands.executeCommand('aiTutorChat.focus');
+            
+            // 3. Show the chat view and make sure it's focused BEFORE sending request
+            try {
+                console.log("Showing chat view before optimize code query");
+                await state.chatViewProvider.showView();
+            } catch (error) {
+                console.error("Failed to show chat view before optimize code query:", error);
+            }
             
             // Show progress indicator
             vscode.window.withProgress({
@@ -556,8 +541,20 @@ export function registerCommands(
                         timestamp: Date.now()
                     });
                     
+                    // Update chat
                     state.chatViewProvider.update(state.chatHistory);
                     state.updateChatHistory(state.chatHistory);
+                    
+                    // Turn off loading state
+                    state.chatViewProvider.setLoading(false);
+                    
+                    // Show the chat view AFTER receiving response
+                    try {
+                        console.log("Showing chat view after optimize code response");
+                        await state.chatViewProvider.showView();
+                    } catch (error) {
+                        console.error("Failed to show chat view after optimize code response:", error);
+                    }
                     
                     // If there are code changes, display them inline
                     if (parsedResponse.codeChanges && parsedResponse.codeChanges.length > 0) {
@@ -578,6 +575,7 @@ export function registerCommands(
                 } catch (error) {
                     handleQueryError(error, state);
                 } finally {
+                    // Always turn off loading state
                     state.chatViewProvider.setLoading(false);
                 }
             });
@@ -637,11 +635,20 @@ export function registerCommands(
                 timestamp: Date.now()
             });
             
-            // Update chat UI and open the chat view
+            // 1. First update chat UI
             state.chatViewProvider.update(state.chatHistory);
             state.updateChatHistory(state.chatHistory);
+            
+            // 2. Set loading state
             state.chatViewProvider.setLoading(true);
-            vscode.commands.executeCommand('aiTutorChat.focus');
+            
+            // 3. Show the chat view and make sure it's focused BEFORE sending request
+            try {
+                console.log("Showing chat view before get suggestion query");
+                await state.chatViewProvider.showView();
+            } catch (error) {
+                console.error("Failed to show chat view before get suggestion query:", error);
+            }
             
             // Show progress
             vscode.window.withProgress({
@@ -669,8 +676,20 @@ export function registerCommands(
                         timestamp: Date.now()
                     });
                     
+                    // Update chat
                     state.chatViewProvider.update(state.chatHistory);
                     state.updateChatHistory(state.chatHistory);
+                    
+                    // Turn off loading state
+                    state.chatViewProvider.setLoading(false);
+                    
+                    // Show the chat view AFTER receiving response
+                    try {
+                        console.log("Showing chat view after get suggestion response");
+                        await state.chatViewProvider.showView();
+                    } catch (error) {
+                        console.error("Failed to show chat view after get suggestion response:", error);
+                    }
                     
                     // If there are code changes, display them inline
                     if (parsedResponse.codeChanges && parsedResponse.codeChanges.length > 0) {
@@ -691,6 +710,7 @@ export function registerCommands(
                 } catch (error) {
                     handleQueryError(error, state);
                 } finally {
+                    // Always turn off loading state
                     state.chatViewProvider.setLoading(false);
                 }
             });

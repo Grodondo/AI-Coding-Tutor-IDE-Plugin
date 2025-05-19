@@ -114,6 +114,11 @@
         "icon": "$(comment-discussion)"
       },
       {
+        "command": "ai-coding-tutor.openChat",
+        "title": "Open AI Coding Tutor Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "ai-coding-tutor.analyzeCode",
         "title": "Analyze Current File",
         "icon": "$(microscope)"
@@ -200,7 +205,33 @@
           "when": "aiCodingTutor.isActive"
         }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "ai-coding-tutor.askQuery",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "ai-coding-tutor.openChat",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c",
+        "when": "editorTextFocus || editorHasSelection"
+      },
+      {
+        "command": "ai-coding-tutor.explainCode",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "editorHasSelection && aiCodingTutor.isActive"
+      },
+      {
+        "command": "ai-coding-tutor.optimizeCode",
+        "key": "ctrl+shift+o",
+        "mac": "cmd+shift+o",
+        "when": "editorHasSelection && aiCodingTutor.isActive"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

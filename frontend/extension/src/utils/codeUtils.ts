@@ -119,7 +119,7 @@ export function extractImports(code: string, language: string): string[] {
             case 'javascript':
                 // Extract import statements
                 const importRegex = /import\s+.*?from\s+['"](.+?)['"];?/g;
-                let match;
+                let match: RegExpExecArray | null;
                 while ((match = importRegex.exec(code)) !== null) {
                     imports.push(match[1]);
                 }
@@ -127,8 +127,9 @@ export function extractImports(code: string, language: string): string[] {
             case 'python':
                 // Extract import and from statements
                 const pythonImportRegex = /(?:import|from)\s+([^\s]+)/g;
-                while ((match = pythonImportRegex.exec(code)) !== null) {
-                    imports.push(match[1]);
+                let pyMatch: RegExpExecArray | null;
+                while ((pyMatch = pythonImportRegex.exec(code)) !== null) {
+                    imports.push(pyMatch[1]);
                 }
                 break;
             case 'java':
@@ -137,8 +138,9 @@ export function extractImports(code: string, language: string): string[] {
             case 'cpp':
                 // Extract import/using/include statements
                 const otherImportRegex = /(?:import|using|#include)\s+['<"]?([^'"<>]*)['">]?/g;
-                while ((match = otherImportRegex.exec(code)) !== null) {
-                    imports.push(match[1]);
+                let otherMatch: RegExpExecArray | null;
+                while ((otherMatch = otherImportRegex.exec(code)) !== null) {
+                    imports.push(otherMatch[1]);
                 }
                 break;
         }
@@ -169,7 +171,7 @@ export async function parseResponseForCodeChanges(response: string, editor?: vsc
     try {
         // Extract code blocks with language tags
         const codeBlockRegex = /```([a-zA-Z0-9_+-]*)\n([\s\S]*?)```/g;
-        let match;
+        let match: RegExpExecArray | null;
         
         while ((match = codeBlockRegex.exec(response)) !== null) {
             const language = match[1].trim() || (editor ? editor.document.languageId : 'plaintext');

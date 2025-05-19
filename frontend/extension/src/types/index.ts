@@ -25,6 +25,7 @@ export interface ChatMessage {
     content: string;
     timestamp: number;
     codeContext?: string; // Store code context separately 
+    queryId?: string; // ID to associate with feedback
 }
 
 export interface CodeChange {

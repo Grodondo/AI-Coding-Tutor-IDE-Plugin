@@ -56,6 +56,14 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.onDidChangeTextEditorSelection(() => codeLensEmitter.fire())
     );
 
+    // Add a direct command to open the chat view
+    context.subscriptions.push(
+        vscode.commands.registerCommand('ai-coding-tutor.openChat', async () => {
+            await vscode.commands.executeCommand('workbench.view.extension.aiTutorSidebar');
+            await vscode.commands.executeCommand('aiTutorChat.focus');
+        })
+    );
+
     // Create the state manager
     const stateManager = new StateManager(
         isActive, 
