@@ -20,42 +20,53 @@
     "education"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onView:aiTutorView",
+    "onView:aiTutorChat",
+    "onCommand:ai-coding-tutor.toggleActivation",
+    "onCommand:ai-coding-tutor.askQuery",
+    "onCommand:ai-coding-tutor.analyzeCode",
+    "onCommand:ai-coding-tutor.explainCode",
+    "onCommand:ai-coding-tutor.optimizeCode",
+    "onCommand:ai-coding-tutor.getSuggestion",
+    "onCommand:ai-coding-tutor.clearSuggestions",
+    "onCommand:ai-coding-tutor.exportChatHistory"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "configuration": {
       "title": "AI Coding Tutor",
       "properties": {
-        "aiCodingTutor.enable": {
+        "aiCodingTutor.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable AI Coding Tutor"
-        },
-        "aiCodingTutor.proficiencyLevel": {
-          "type": "string",
-          "enum": [
-            "novice",
-            "medium",
-            "expert"
-          ],
-          "default": "novice",
-          "description": "Set your proficiency level for AI explanations"
+          "description": "Enable or disable the AI Coding Tutor extension"
         },
         "aiCodingTutor.backendUrl": {
           "type": "string",
           "default": "http://localhost:8080",
-          "description": "URL of the AI Coding Tutor backend"
+          "description": "URL to the AI Coding Tutor backend service"
         },
-        "aiCodingTutor.autoAnalyze": {
+        "aiCodingTutor.proficiencyLevel": {
+          "type": "string",
+          "default": "medium",
+          "enum": ["novice", "medium", "expert"],
+          "enumDescriptions": [
+            "Simple explanations focused on fundamentals",
+            "Balanced explanations with more technical details",
+            "In-depth technical explanations"
+          ],
+          "description": "Your programming proficiency level for tailored explanations"
+        },
+        "aiCodingTutor.autoAnalyzeOnSave": {
           "type": "boolean",
-          "default": true,
-          "description": "Automatically analyze your code when you save a file"
+          "default": false,
+          "description": "Automatically analyze code on save"
         },
         "aiCodingTutor.showInlineDecorations": {
           "type": "boolean",
           "default": true,
-          "description": "Show inline suggestions in the editor"
+          "description": "Show inline decorations for AI suggestions"
         }
       }
     },
@@ -91,48 +102,53 @@
     "commands": [
       {
         "command": "ai-coding-tutor.toggleActivation",
-        "title": "AI Coding Tutor: Toggle Activation",
-        "icon": "$(extensions-sync-enabled)"
+        "title": "Toggle AI Coding Tutor"
       },
       {
         "command": "ai-coding-tutor.selectLevel",
-        "title": "AI Coding Tutor: Select Proficiency Level",
-        "icon": "$(mortar-board)"
+        "title": "Select Proficiency Level"
       },
       {
         "command": "ai-coding-tutor.askQuery",
-        "title": "AI Coding Tutor: Ask Question",
-        "icon": "$(question)"
+        "title": "Ask AI Coding Tutor",
+        "icon": "$(comment-discussion)"
       },
       {
         "command": "ai-coding-tutor.analyzeCode",
-        "title": "AI Coding Tutor: Analyze Code",
+        "title": "Analyze Current File",
         "icon": "$(microscope)"
       },
       {
-        "command": "ai-coding-tutor.getSuggestion",
-        "title": "AI Coding Tutor: Get Suggestion",
-        "icon": "$(lightbulb)"
-      },
-      {
-        "command": "ai-coding-tutor.explainCode",
-        "title": "AI Coding Tutor: Explain Code",
-        "icon": "$(info)"
-      },
-      {
-        "command": "ai-coding-tutor.optimizeCode",
-        "title": "AI Coding Tutor: Optimize Code",
-        "icon": "$(wand)"
-      },
-      {
         "command": "ai-coding-tutor.clearSuggestions",
-        "title": "AI Coding Tutor: Clear Suggestions",
+        "title": "Clear AI Suggestions",
         "icon": "$(clear-all)"
       },
       {
+        "command": "ai-coding-tutor.explainCode",
+        "title": "AI Tutor: Explain Selected Code",
+        "icon": "$(book)"
+      },
+      {
+        "command": "ai-coding-tutor.optimizeCode",
+        "title": "AI Tutor: Optimize Selected Code",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "ai-coding-tutor.getSuggestion",
+        "title": "AI Tutor: Get Code Suggestion",
+        "icon": "$(lightbulb)"
+      },
+      {
+        "command": "ai-coding-tutor.showTutorial",
+        "title": "Show Tutorial"
+      },
+      {
         "command": "ai-coding-tutor.exportChatHistory",
-        "title": "AI Coding Tutor: Export Chat History",
-        "icon": "$(save-all)"
+        "title": "Export Chat History"
+      },
+      {
+        "command": "ai-coding-tutor.clearChatHistory",
+        "title": "Clear Chat History"
       }
     ],
     "menus": {
@@ -155,19 +171,33 @@
       ],
       "editor/context": [
         {
-          "command": "ai-coding-tutor.getSuggestion",
-          "when": "editorTextFocus",
-          "group": "AI Coding Tutor"
-        },
-        {
           "command": "ai-coding-tutor.explainCode",
-          "when": "editorHasSelection",
-          "group": "AI Coding Tutor"
+          "when": "editorHasSelection && aiCodingTutor.isActive",
+          "group": "9_aicodingtutor@1"
         },
         {
           "command": "ai-coding-tutor.optimizeCode",
-          "when": "editorHasSelection",
-          "group": "AI Coding Tutor"
+          "when": "editorHasSelection && aiCodingTutor.isActive",
+          "group": "9_aicodingtutor@2"
+        },
+        {
+          "command": "ai-coding-tutor.getSuggestion",
+          "when": "aiCodingTutor.isActive",
+          "group": "9_aicodingtutor@3"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "ai-coding-tutor.explainCode",
+          "when": "aiCodingTutor.isActive"
+        },
+        {
+          "command": "ai-coding-tutor.optimizeCode",
+          "when": "aiCodingTutor.isActive"
+        },
+        {
+          "command": "ai-coding-tutor.getSuggestion",
+          "when": "aiCodingTutor.isActive"
         }
       ]
     }
