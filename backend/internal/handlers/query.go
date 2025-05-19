@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"fmt"
 	"strings"
 
+	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/logger"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/models"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
 	"github.com/gin-gonic/gin"
@@ -36,10 +36,11 @@ type QueryResponse struct {
 // @Failure 500 {object} map[string]string "Internal server error"
 // @Router /api/v1/query [post]
 func QueryHandler(aiService *services.AIService, dbService *services.DBService, settingsService *services.SettingsService) gin.HandlerFunc {
-	fmt.Printf("QueryHandler: aiService=%v, dbService=%v\n", aiService, dbService)
+	logger.Log.Debugf("QueryHandler: aiService=%v, dbService=%v", aiService, dbService)
 	return func(c *gin.Context) {
 		var req QueryRequest
 		if err := c.BindJSON(&req); err != nil {
+			logger.Log.Warnf("Invalid request: %v", err)
 			c.JSON(400, gin.H{"error": "Invalid request"})
 			return
 		}
@@ -50,11 +51,13 @@ func QueryHandler(aiService *services.AIService, dbService *services.DBService, 
 		// Settings service to get the prompt template
 		ai_settings, err := settingsService.GetAiSettings("query")
 		if err != nil {
+			logger.Log.Errorf("Failed to get settings: %v", err)
 			c.JSON(500, gin.H{"error": "Failed to get settings"})
 			return
 		}
 		promptTemplate, ok := ai_settings.Prompts[req.Level]
 		if !ok {
+			logger.Log.Warnf("Invalid level: %s", req.Level)
 			c.JSON(400, gin.H{"error": "Invalid level"})
 			return
 		}
@@ -67,12 +70,12 @@ func QueryHandler(aiService *services.AIService, dbService *services.DBService, 
 		// Get AI response
 		response, err := aiService.GetResponse("query", ai_settings.AIProvider, ai_settings.AIModel, prompt)
 		if err != nil {
-			fmt.Printf("QueryHandler: err=%v\n", err)
+			logger.Log.Errorf("Failed to get AI response: %v", err)
 			c.JSON(500, gin.H{"error": "Failed to get AI response"})
 			return
 		}
 
-		fmt.Printf("Response recieved: %s\n", strings.Split(response, "\n")[0])
+		logger.Log.Infof("Response received: %s", strings.Split(response, "\n")[0])
 
 		// Store in database
 		query := &models.Query{
@@ -84,6 +87,7 @@ func QueryHandler(aiService *services.AIService, dbService *services.DBService, 
 			Feedback: nil,
 		}
 		if err := dbService.CreateQuery(query); err != nil {
+			logger.Log.Errorf("Failed to store query: %v", err)
 			c.JSON(500, gin.H{"error": "Failed to store query"})
 			return
 		}

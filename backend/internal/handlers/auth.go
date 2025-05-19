@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/logger"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -93,16 +94,16 @@ func LoginHandler(dbService *services.DBService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req LoginRequest
 		if err := c.BindJSON(&req); err != nil {
-			fmt.Printf("LoginHandler: err=%v\n | Invalid request format", err)
+			logger.Log.Warnf("Invalid request format: %v", err)
 			c.JSON(400, gin.H{"error": "Invalid request format"})
 			return
 		}
 
 		passwordHash, role, err := dbService.GetUserCredentials(req.Username)
-		fmt.Printf("LoginHandler: passwordHash=%v\n | role=%v\n | err=%v\n", passwordHash, role, err)
-		fmt.Printf("LoginHandler: req.Password=%v\n", req.Password)
+		logger.Log.Debugf("Login attempt for user: %s with role: %s", req.Username, role)
+
 		if err != nil || bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)) != nil {
-			fmt.Printf("LoginHandler: err=%v\n | Invalid credentials", err)
+			logger.Log.Warnf("Invalid login attempt for user: %s", req.Username)
 			c.JSON(401, gin.H{"error": "Invalid credentials"})
 			return
 		}
@@ -117,10 +118,12 @@ func LoginHandler(dbService *services.DBService) gin.HandlerFunc {
 		// Sign the token with your secret key
 		tokenString, err := token.SignedString([]byte(EncryptionKey))
 		if err != nil {
+			logger.Log.Errorf("Failed to generate token: %v", err)
 			c.JSON(500, gin.H{"error": "Failed to generate token"})
 			return
 		}
 
+		logger.Log.Infof("Successful login for user: %s", req.Username)
 		c.JSON(200, gin.H{
 			"token": tokenString,
 			"user": gin.H{
@@ -156,12 +159,14 @@ func RegisterHandler(dbService *services.DBService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req RegisterRequest
 		if err := c.BindJSON(&req); err != nil {
+			logger.Log.Warnf("Invalid registration request: %v", err)
 			c.JSON(400, gin.H{"error": "Invalid request format"})
 			return
 		}
 
 		// Validate password
 		if err := validatePassword(req.Password); err != nil {
+			logger.Log.Warnf("Password validation failed: %v", err)
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
@@ -169,10 +174,12 @@ func RegisterHandler(dbService *services.DBService) gin.HandlerFunc {
 		// Check if email already exists
 		exists, err := dbService.EmailExists(req.Email)
 		if err != nil {
+			logger.Log.Errorf("Error checking email existence: %v", err)
 			c.JSON(500, gin.H{"error": "Internal server error"})
 			return
 		}
 		if exists {
+			logger.Log.Warnf("Registration attempt with existing email: %s", req.Email)
 			c.JSON(400, gin.H{"error": "Email already registered"})
 			return
 		}
@@ -180,6 +187,7 @@ func RegisterHandler(dbService *services.DBService) gin.HandlerFunc {
 		// Hash password
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
+			logger.Log.Errorf("Password hashing failed: %v", err)
 			c.JSON(500, gin.H{"error": "Internal server error"})
 			return
 		}
@@ -194,10 +202,12 @@ func RegisterHandler(dbService *services.DBService) gin.HandlerFunc {
 			Role:         "user",
 		})
 		if err != nil {
+			logger.Log.Errorf("Failed to create user: %v", err)
 			c.JSON(500, gin.H{"error": "Failed to create user"})
 			return
 		}
 
+		logger.Log.Infof("New user registered: %s (%s)", req.Username, req.Email)
 		c.JSON(201, gin.H{"message": "User registered successfully"})
 	}
 }

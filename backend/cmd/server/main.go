@@ -7,6 +7,7 @@ import (
 
 	_ "github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/docs"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/handlers"
+	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/logger"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/middleware"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
 	"github.com/gin-contrib/cors"
@@ -37,7 +38,13 @@ import (
 
 // @x-extension-openapi {"example": "value on a json format"}
 func main() {
-	fmt.Println("Starting server...")
+
+	// Initialize logger
+	logLevel := os.Getenv("LOG_LEVEL")
+	if logLevel == "" {
+		logLevel = "info" // Default to info level
+	}
+	logger.Init(logLevel)
 
 	// Environment variables
 	dbHost := os.Getenv("DB_HOST")
@@ -52,20 +59,23 @@ func main() {
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbHost, dbPort, dbUser, dbPassword, dbName)
 
-	fmt.Printf("DSN: %s\n", dsn)
+	logger.Log.Debugf("DSN: %s", dsn)
 
 	// Services
 	dbService, err := services.NewDBService(dsn)
 	if err != nil {
-		panic(err)
+		logger.Log.Fatal("Failed to initialize database service: ", err)
 	}
 	settingsService, err := services.NewSettingsService(dbService)
 	if err != nil {
-		panic(err)
+		logger.Log.Fatal("Failed to initialize settings service: ", err)
 	}
 	aiService := services.NewAIService(settingsService)
 
 	// Gin router
+	if logLevel != "debug" {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	router := gin.Default()
 
 	// CORS middleware configuration
@@ -109,5 +119,11 @@ func main() {
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, url))
 
 	// Run server
-	router.Run(":8080")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // Default port
+	}
+
+	logger.Log.Infof("Server starting on port %s", port)
+	router.Run(":" + port)
 }

@@ -1,11 +1,11 @@
 package handlers
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/logger"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
 	"github.com/gin-gonic/gin"
 )
@@ -39,19 +39,22 @@ func AnalyzeHandler(aiService *services.AIService, dbService *services.DBService
 	return func(c *gin.Context) {
 		var req AnalyzeRequest
 		if err := c.BindJSON(&req); err != nil {
-			c.JSON(400, gin.H{"error": fmt.Sprintf("Invalid request: %v", err)})
+			logger.Log.Warnf("Invalid request: %v", err)
+			c.JSON(400, gin.H{"error": "Invalid request"})
 			return
 		}
 
 		// Construct prompt for full code analysis
 		ai_settings, err := settingsService.GetAiSettings("analyze")
 		if err != nil {
-			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to get settings: %v", err)})
+			logger.Log.Errorf("Failed to get settings: %v", err)
+			c.JSON(500, gin.H{"error": "Failed to get settings"})
 			return
 		}
 		promptTemplate, ok := ai_settings.Prompts[req.Level]
 		if !ok {
-			c.JSON(400, gin.H{"error": fmt.Sprintf("Invalid level: %s", req.Level)})
+			logger.Log.Warnf("Invalid level: %s", req.Level)
+			c.JSON(400, gin.H{"error": "Invalid level"})
 			return
 		}
 
@@ -73,21 +76,28 @@ func AnalyzeHandler(aiService *services.AIService, dbService *services.DBService
 		}
 
 		prompt := enhancedPrompt + req.Code
+		logger.Log.Debugf("Analysis prompt created for level: %s", req.Level)
 
 		// Get AI response
 		response, err := aiService.GetResponse("analyze", ai_settings.AIProvider, ai_settings.AIModel, prompt)
 		if err != nil {
-			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to get AI response: %v", err)})
+			logger.Log.Errorf("Failed to get AI response: %v", err)
+			c.JSON(500, gin.H{"error": "Failed to get AI response"})
 			return
 		}
+
+		logger.Log.Debugf("Analysis response received, parsing suggestions")
 
 		// Parse the response into a list of suggestions
 		suggestions := parseAnalyzeResponse(response)
 
 		// If no line-specific suggestions were found, try to create them
 		if len(suggestions) == 0 && req.IncludeLineNumbers {
+			logger.Log.Warnf("No line-specific suggestions found, using fallback parsing")
 			suggestions = createFallbackSuggestions(response, req.Code)
 		}
+
+		logger.Log.Infof("Analysis complete with %d suggestions", len(suggestions))
 
 		// Respond to client
 		c.JSON(200, gin.H{
@@ -144,12 +154,12 @@ func parseAnalyzeResponse(response string) []map[string]interface{} {
 		if len(beforeMatch) > 1 && len(afterMatch) > 1 {
 			before := beforeMatch[1]
 			after := afterMatch[1]
-			diff = fmt.Sprintf("- %s\n+ %s", before, after)
+			diff = strings.Join([]string{"- ", before, "\n+ ", after}, "")
 		}
 
 		// Extract explanation (anything between the title and Before/After examples)
 		explanation := content
-		explanation = strings.TrimPrefix(explanation, fmt.Sprintf("Line %s:%s", lineNumStr, title))
+		explanation = strings.TrimPrefix(explanation, strings.Join([]string{"Line ", lineNumStr, ":", title}, ""))
 
 		// Remove Before/After lines if present
 		if beforeMatch != nil {

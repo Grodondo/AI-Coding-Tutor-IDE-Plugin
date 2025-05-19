@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 
+	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/logger"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/models"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/utils"
@@ -47,17 +47,20 @@ func GetSettingsHandler(dbService *services.DBService, settingsService *services
 		settings := make(map[string]*services.AiSettings)
 		providers, err := dbService.GetAllUniqueServices()
 		if err != nil {
-			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to get providers: %v", err)})
+			logger.Log.Errorf("Failed to get providers: %v", err)
+			c.JSON(500, gin.H{"error": "Failed to get providers"})
 			return
 		}
 		for _, service := range providers {
 			setting, err := settingsService.GetAiSettings(service)
 			if err != nil {
-				c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to retrieve settings: %v", err)})
+				logger.Log.Errorf("Failed to retrieve settings for %s: %v", service, err)
+				c.JSON(500, gin.H{"error": "Failed to retrieve settings"})
 				return
 			}
 			settings[service] = setting
 		}
+		logger.Log.Debugf("Retrieved settings for %d services", len(settings))
 		c.JSON(200, settings)
 	}
 }
@@ -82,11 +85,13 @@ func UpdateSettingsHandler(dbService *services.DBService, settingsService *servi
 		}
 
 		if err := c.BindJSON(&req); err != nil {
+			logger.Log.Warnf("Invalid settings request format: %v", err)
 			c.JSON(400, gin.H{"error": "Invalid request format"})
 			return
 		}
 
 		if EncryptionKey == "" {
+			logger.Log.Errorf("Encryption key not set")
 			c.JSON(500, gin.H{"error": "Encryption key not set"})
 			return
 		}
@@ -94,6 +99,7 @@ func UpdateSettingsHandler(dbService *services.DBService, settingsService *servi
 		// Unmarshal config to extract and encrypt the API key
 		var configMap map[string]interface{}
 		if err := json.Unmarshal(req.Config, &configMap); err != nil {
+			logger.Log.Warnf("Invalid config format: %v", err)
 			c.JSON(400, gin.H{"error": "Invalid config format"})
 			return
 		}
@@ -101,11 +107,13 @@ func UpdateSettingsHandler(dbService *services.DBService, settingsService *servi
 		// Extract and encrypt the API key
 		apiKey, ok := configMap["api_key"].(string)
 		if !ok {
+			logger.Log.Warnf("API key is missing or invalid for service: %s", req.Service)
 			c.JSON(400, gin.H{"error": "API key is missing or invalid"})
 			return
 		}
 		encryptedApiKey, err := utils.Encrypt(apiKey, EncryptionKey)
 		if err != nil {
+			logger.Log.Errorf("Failed to encrypt API key: %v", err)
 			c.JSON(500, gin.H{"error": "Failed to encrypt API key"})
 			return
 		}
@@ -117,21 +125,26 @@ func UpdateSettingsHandler(dbService *services.DBService, settingsService *servi
 		// Marshal modified config back to JSON
 		configJSON, err := json.Marshal(configMap)
 		if err != nil {
+			logger.Log.Errorf("Failed to marshal settings: %v", err)
 			c.JSON(500, gin.H{"error": "Failed to marshal settings"})
 			return
 		}
 
 		// Use DBService to update settings
 		if err := dbService.UpdateOrInsertSettings(req.Service, string(configJSON)); err != nil {
+			logger.Log.Errorf("Failed to update settings for %s: %v", req.Service, err)
 			c.JSON(500, gin.H{"error": "Failed to update settings"})
 			return
 		}
 
 		// Reload settings to reflect changes
 		if err := settingsService.LoadAiSettings(); err != nil {
+			logger.Log.Errorf("Failed to load settings: %v", err)
 			c.JSON(500, gin.H{"error": "Failed to load settings"})
 			return
 		}
+
+		logger.Log.Infof("Settings updated successfully for service: %s", req.Service)
 		// Return success response
 		c.JSON(200, gin.H{"status": "success"})
 	}
@@ -153,12 +166,14 @@ func DeleteSettingsHandler(dbService *services.DBService, settingsService *servi
 		// Extract the service parameter from the URL
 		service := c.Param("service")
 		if service == "" {
+			logger.Log.Warnf("Attempted to delete settings with empty service name")
 			c.JSON(400, gin.H{"error": "Service name is required"})
 			return
 		}
 
 		// Validate the service name
 		if service == string(models.QueryService) || service == string(models.AnalyzeService) {
+			logger.Log.Warnf("Attempted to delete protected service settings: %s", service)
 			c.JSON(400, gin.H{"error": "Cannot delete settings for query or analyze service"})
 			return
 		}
@@ -166,16 +181,19 @@ func DeleteSettingsHandler(dbService *services.DBService, settingsService *servi
 		// Delete the setting from the database
 		err := dbService.DeleteSettings(service)
 		if err != nil {
-			c.JSON(500, gin.H{"error": fmt.Sprintf("Failed to delete settings: %v", err)})
+			logger.Log.Errorf("Failed to delete settings for %s: %v", service, err)
+			c.JSON(500, gin.H{"error": "Failed to delete settings"})
 			return
 		}
 
 		// Reload settings to reflect the deletion
 		if err := settingsService.LoadAiSettings(); err != nil {
+			logger.Log.Errorf("Failed to load settings after deletion: %v", err)
 			c.JSON(500, gin.H{"error": "Failed to load settings"})
 			return
 		}
 
+		logger.Log.Infof("Settings deleted successfully for service: %s", service)
 		// Return success response
 		c.JSON(200, gin.H{"status": "success"})
 	}
