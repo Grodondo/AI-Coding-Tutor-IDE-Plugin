@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/logger"
@@ -13,9 +14,9 @@ import (
 // QueryRequest defines the structure for AI query requests
 // @Description Query request structure for AI interactions
 type QueryRequest struct {
-	Query   string `json:"query" binding:"required" example:"How do I create a new file in Python?"`
-	Level   string `json:"level" binding:"required" example:"beginner" enums:"beginner,intermediate,advanced"`
-	Context string `json:"context,omitempty"`
+	Query   string      `json:"query" binding:"required" example:"How do I create a new file in Python?"`
+	Level   string      `json:"level" binding:"required" example:"beginner" enums:"beginner,intermediate,advanced"`
+	Context interface{} `json:"context,omitempty"`
 }
 
 // QueryResponse defines the structure for AI query responses
@@ -62,8 +63,26 @@ func QueryHandler(aiService *services.AIService, dbService *services.DBService, 
 			return
 		}
 		prompt := promptTemplate
-		if req.Context != "" {
-			prompt += "\nPrevious conversation:\n" + req.Context + "\n\nCurrent query: "
+
+		// Handle context which can now be a string or an object
+		if req.Context != nil {
+			contextStr := ""
+			switch v := req.Context.(type) {
+			case string:
+				contextStr = v
+			default:
+				// Convert context object to JSON string
+				contextBytes, err := json.Marshal(v)
+				if err != nil {
+					logger.Log.Warnf("Failed to marshal context: %v", err)
+				} else {
+					contextStr = string(contextBytes)
+				}
+			}
+
+			if contextStr != "" {
+				prompt += "\nPrevious conversation:\n" + contextStr + "\n\nCurrent query: "
+			}
 		}
 		prompt += req.Query
 
