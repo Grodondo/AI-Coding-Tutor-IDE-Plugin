@@ -28,9 +28,7 @@ export const Navbar = () => {
             <Link to="/" className="text-2xl font-bold text-gray-800 dark:text-white">
               AI<span className="text-blue-600 dark:text-blue-400">Tutor</span>
             </Link>
-          </div>
-
-          {/* Desktop Navigation Links */}
+          </div>          {/* Desktop Navigation Links */}
           <div className="hidden md:flex space-x-8">
             <Link
               to="/"
@@ -44,13 +42,29 @@ export const Navbar = () => {
             >
               About
             </Link>
-            {user?.role === 'admin' && (
+            {user && (
               <Link
-                to="/admin/settings"
+                to="/chat"
                 className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 font-medium"
               >
-                Admin Settings
+                Chat
               </Link>
+            )}
+            {user?.role === 'admin' && (
+              <>
+                <Link
+                  to="/admin/settings"
+                  className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 font-medium"
+                >
+                  AI Settings
+                </Link>
+                <Link
+                  to="/admin/users"
+                  className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 font-medium"
+                >
+                  User Management
+                </Link>
+              </>
             )}
           </div>
 
@@ -125,31 +139,50 @@ export const Navbar = () => {
               </svg>
             </button>
           </div>
-        </div>
-
-        {/* Mobile Menu */}
+        </div>        {/* Mobile Menu */}
         {menuOpen && (
           <div className="md:hidden">
             <div className="px-2 pt-2 pb-3 space-y-1 bg-gray-50 dark:bg-gray-800">
               <Link
                 to="/"
                 className="block px-3 py-2 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                onClick={() => setMenuOpen(false)}
               >
                 Home
               </Link>
               <Link
                 to="/about"
                 className="block px-3 py-2 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                onClick={() => setMenuOpen(false)}
               >
                 About
               </Link>
-              {user?.role === 'admin' && (
+              {user && (
                 <Link
-                  to="/admin/settings"
+                  to="/chat"
                   className="block px-3 py-2 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                  onClick={() => setMenuOpen(false)}
                 >
-                  Admin Settings
+                  Chat
                 </Link>
+              )}
+              {user?.role === 'admin' && (
+                <>
+                  <Link
+                    to="/admin/settings"
+                    className="block px-3 py-2 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    AI Settings
+                  </Link>
+                  <Link
+                    to="/admin/users"
+                    className="block px-3 py-2 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    User Management
+                  </Link>
+                </>
               )}
             </div>
           </div>

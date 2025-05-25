@@ -66,9 +66,24 @@ function AppContent() {
     }
   }, [location, user, navigate]);
 
+  // Determine if navbar should be shown
+  const shouldShowNavbar = () => {
+    // Always show navbar if user is authenticated
+    if (user) return true;
+    
+    // Hide navbar for non-authenticated users on home and about pages
+    const currentPath = location.pathname;
+    if (currentPath === '/' || currentPath === '/about') {
+      return false;
+    }
+    
+    // Show navbar for all other pages (like auth pages)
+    return true;
+  };
+
   return (
     <Layout>
-      <Navbar />
+      {shouldShowNavbar() && <Navbar />}
       <Outlet />
     </Layout>
   );

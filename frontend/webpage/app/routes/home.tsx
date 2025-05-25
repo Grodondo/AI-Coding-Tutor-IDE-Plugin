@@ -38,63 +38,108 @@ export function meta({}: Route.MetaArgs) {
 // Landing page component for non-authenticated users
 function LandingPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-      <div className="container mx-auto px-4 py-16">
-        <div className="text-center">
-          <h1 className="text-5xl font-bold text-gray-900 dark:text-white mb-6">
-            AI Coding <span className="text-blue-600 dark:text-blue-400">Tutor</span>
-          </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto">
-            Your intelligent programming companion. Get instant help with coding questions, 
-            debug issues, and learn best practices from our advanced AI assistant.
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 relative overflow-hidden">
+      {/* Animated background elements */}
+      <div className="absolute inset-0">
+        <div className="absolute top-10 left-10 w-72 h-72 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
+        <div className="absolute top-32 right-10 w-72 h-72 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse animation-delay-2000"></div>
+        <div className="absolute bottom-32 left-32 w-72 h-72 bg-indigo-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse animation-delay-4000"></div>
+      </div>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+      {/* Custom navbar for landing page */}
+      <nav className="relative z-10 px-6 py-4">
+        <div className="flex justify-between items-center">
+          <div className="text-2xl font-bold text-white">
+            AI<span className="text-blue-400">Tutor</span>
+          </div>
+          <div className="flex gap-4">
             <Link
               to="/auth/login"
-              className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+              className="px-6 py-2 text-white border border-white/30 rounded-full hover:bg-white/10 transition-all duration-300"
+            >
+              Sign In
+            </Link>
+            <Link
+              to="/auth/register"
+              className="px-6 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-all duration-300"
             >
               Get Started
             </Link>
+          </div>
+        </div>
+      </nav>
+
+      {/* Main content */}
+      <div className="relative z-10 container mx-auto px-6 py-16">
+        <div className="text-center">
+          <h1 className="text-6xl md:text-7xl font-bold text-white mb-8 leading-tight">
+            Your AI-Powered
+            <br />
+            <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+              Coding Tutor
+            </span>
+          </h1>
+          <p className="text-xl text-gray-300 mb-12 max-w-3xl mx-auto leading-relaxed">
+            Transform your programming journey with intelligent assistance. Get instant help,
+            debug complex issues, and master coding concepts with our advanced AI companion.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-6 justify-center mb-20">
+            <Link
+              to="/auth/register"
+              className="px-10 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 transition-all duration-300 font-semibold text-lg shadow-2xl transform hover:scale-105"
+            >
+              Start Learning Now
+            </Link>
             <Link
               to="/about"
-              className="px-8 py-3 border border-blue-600 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors font-semibold"
+              className="px-10 py-4 border-2 border-white/30 text-white rounded-full hover:bg-white/10 transition-all duration-300 font-semibold text-lg backdrop-blur-sm"
             >
-              Learn More
+              Discover Features
             </Link>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg">
-              <div className="text-blue-600 dark:text-blue-400 text-3xl mb-4">💡</div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Instant Help
+          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            <div className="bg-white/10 backdrop-blur-md p-8 rounded-2xl border border-white/20 hover:bg-white/15 transition-all duration-300">
+              <div className="text-5xl mb-6">⚡</div>
+              <h3 className="text-2xl font-bold text-white mb-4">
+                Instant Solutions
               </h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Get immediate answers to your coding questions and debug complex problems with AI assistance.
+              <p className="text-gray-300 leading-relaxed">
+                Get immediate answers to coding questions and debug complex problems with context-aware AI assistance that understands your specific needs.
               </p>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg">
-              <div className="text-blue-600 dark:text-blue-400 text-3xl mb-4">🎯</div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Personalized Learning
+            <div className="bg-white/10 backdrop-blur-md p-8 rounded-2xl border border-white/20 hover:bg-white/15 transition-all duration-300">
+              <div className="text-5xl mb-6">🎯</div>
+              <h3 className="text-2xl font-bold text-white mb-4">
+                Adaptive Learning
               </h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Adaptive responses based on your skill level, from beginner to expert programming guidance.
+              <p className="text-gray-300 leading-relaxed">
+                Personalized responses that adapt to your skill level, providing beginner-friendly explanations or advanced technical insights as needed.
               </p>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg">
-              <div className="text-blue-600 dark:text-blue-400 text-3xl mb-4">⚡</div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Fast & Accurate
+            <div className="bg-white/10 backdrop-blur-md p-8 rounded-2xl border border-white/20 hover:bg-white/15 transition-all duration-300">
+              <div className="text-5xl mb-6">🚀</div>
+              <h3 className="text-2xl font-bold text-white mb-4">
+                Advanced AI Models
               </h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Powered by advanced AI models to provide quick, accurate, and contextual programming assistance.
+              <p className="text-gray-300 leading-relaxed">
+                Powered by cutting-edge AI technology to provide accurate, contextual programming assistance across multiple languages and frameworks.
               </p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Bottom section */}
+      <div className="relative z-10 text-center py-16 border-t border-white/10">
+        <p className="text-gray-400 mb-4">Join thousands of developers already improving their skills</p>
+        <div className="flex justify-center gap-8 text-gray-500">
+          <span>🔒 Secure & Private</span>
+          <span>📱 Cross-Platform</span>
+          <span>⭐ Trusted by Developers</span>
         </div>
       </div>
     </div>
@@ -104,57 +149,121 @@ function LandingPage() {
 // Admin dashboard component
 function AdminDashboard() {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
       <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+        <div className="mb-12 text-center">
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
             Admin Dashboard
           </h1>
-          <p className="text-gray-600 dark:text-gray-300">
-            Manage AI models, settings, and system configuration
+          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+            Manage AI models, user accounts, and system configuration from your centralized control panel
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
           <Link
             to="/admin/settings"
-            className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700"
+            className="group bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transform hover:-translate-y-2"
           >
-            <div className="flex items-center mb-4">
-              <FiSettings className="text-2xl text-blue-600 dark:text-blue-400 mr-3" />
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+            <div className="flex items-center mb-6">
+              <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-xl group-hover:bg-blue-200 dark:group-hover:bg-blue-800 transition-colors">
+                <FiSettings className="text-3xl text-blue-600 dark:text-blue-400" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white ml-4">
                 AI Settings
               </h3>
             </div>
-            <p className="text-gray-600 dark:text-gray-300">
+            <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-4">
               Configure AI models, API keys, prompts, and temperature settings for different services.
             </p>
+            <div className="text-blue-600 dark:text-blue-400 font-semibold group-hover:text-blue-700 dark:group-hover:text-blue-300">
+              Manage AI Configuration →
+            </div>
           </Link>
 
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center mb-4">
-              <FiUser className="text-2xl text-green-600 dark:text-green-400 mr-3" />
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+          <Link
+            to="/admin/users"
+            className="group bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-200 dark:border-gray-700 hover:border-green-300 dark:hover:border-green-600 transform hover:-translate-y-2"
+          >
+            <div className="flex items-center mb-6">
+              <div className="p-3 bg-green-100 dark:bg-green-900 rounded-xl group-hover:bg-green-200 dark:group-hover:bg-green-800 transition-colors">
+                <FiUser className="text-3xl text-green-600 dark:text-green-400" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white ml-4">
                 User Management
               </h3>
             </div>
-            <p className="text-gray-600 dark:text-gray-300">
-              View and manage user accounts, roles, and permissions.
+            <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-4">
+              View and manage user accounts, roles, permissions, and access control settings.
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Coming soon</p>
-          </div>
+            <div className="text-green-600 dark:text-green-400 font-semibold group-hover:text-green-700 dark:group-hover:text-green-300">
+              Manage Users →
+            </div>
+          </Link>
 
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center mb-4">
-              <FiMessageSquare className="text-2xl text-purple-600 dark:text-purple-400 mr-3" />
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Chat Analytics
+          <Link
+            to="/chat"
+            className="group bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-200 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600 transform hover:-translate-y-2"
+          >
+            <div className="flex items-center mb-6">
+              <div className="p-3 bg-purple-100 dark:bg-purple-900 rounded-xl group-hover:bg-purple-200 dark:group-hover:bg-purple-800 transition-colors">
+                <FiMessageSquare className="text-3xl text-purple-600 dark:text-purple-400" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white ml-4">
+                AI Chat
               </h3>
             </div>
-            <p className="text-gray-600 dark:text-gray-300">
-              Monitor chat usage, popular queries, and system performance metrics.
+            <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-4">
+              Test and interact with AI models using the chat interface for development and testing.
             </p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Coming soon</p>
+            <div className="text-purple-600 dark:text-purple-400 font-semibold group-hover:text-purple-700 dark:group-hover:text-purple-300">
+              Open Chat Interface →
+            </div>
+          </Link>
+
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 opacity-75">
+            <div className="flex items-center mb-6">
+              <div className="p-3 bg-orange-100 dark:bg-orange-900 rounded-xl">
+                <FiMessageSquare className="text-3xl text-orange-600 dark:text-orange-400" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white ml-4">
+                Analytics
+              </h3>
+            </div>
+            <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-4">
+              Monitor chat usage, popular queries, system performance metrics, and usage statistics.
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Coming Soon</p>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 opacity-75">
+            <div className="flex items-center mb-6">
+              <div className="p-3 bg-red-100 dark:bg-red-900 rounded-xl">
+                <FiSettings className="text-3xl text-red-600 dark:text-red-400" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white ml-4">
+                System Settings
+              </h3>
+            </div>
+            <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-4">
+              Configure system-wide settings, security options, and application preferences.
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Coming Soon</p>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 opacity-75">
+            <div className="flex items-center mb-6">
+              <div className="p-3 bg-indigo-100 dark:bg-indigo-900 rounded-xl">
+                <FiUser className="text-3xl text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white ml-4">
+                API Management
+              </h3>
+            </div>
+            <p className="text-gray-600 dark:text-gray-300 leading-relaxed mb-4">
+              Manage API keys, rate limiting, and external service integrations for the platform.
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">Coming Soon</p>
           </div>
         </div>
       </div>
@@ -513,6 +622,7 @@ export default function Home() {
     return <AdminDashboard />;
   }
 
-  // Show chat interface for regular users
-  return <ChatInterface />;
+  // Redirect regular users to chat page
+  window.location.href = '/chat';
+  return null;
 }
