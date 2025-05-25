@@ -13,6 +13,8 @@ export interface AIModel {
     encrypted_api_key: string;
     // what user types in to change it
     api_key: string;
+    // AI model temperature
+    temperature?: number;
     prompts: Record<string,string>;
   };
 }
@@ -108,13 +110,13 @@ export default function AdminSettings() {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+        },        body: JSON.stringify({
           service: model.service,
           config: {
             ai_provider: model.config.ai_provider,
             ai_model:    model.config.ai_model,
             api_key:     model.config.api_key,
+            temperature: model.config.temperature,
             prompts:     model.config.prompts,
           },
         }),
@@ -253,10 +255,15 @@ const ModelForm: React.FC<ModelFormProps> = ({ model, onSave, onCancel }) => {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
   const handleInputChange = (field: keyof AIModel | keyof AIModel['config'], value: string) => {
     if (field === 'service') {
       setFormModel({ ...formModel, service: value });
+    } else if (field === 'temperature') {
+      const numValue = value === '' ? undefined : parseFloat(value);
+      setFormModel({
+        ...formModel,
+        config: { ...formModel.config, temperature: numValue },
+      });
     } else {
       setFormModel({
         ...formModel,
@@ -305,8 +312,7 @@ const ModelForm: React.FC<ModelFormProps> = ({ model, onSave, onCancel }) => {
           placeholder="e.g., llama-3.3-70b-versatile"
           className={`mt-1 block w-full border ${errors.ai_model ? 'border-red-500' : 'border-gray-300'} rounded-md p-2 focus:ring-blue-500 focus:border-blue-500`}
         />
-        {errors.ai_model && <p className="text-red-500 text-sm mt-1">{errors.ai_model}</p>}
-      </div>
+        {errors.ai_model && <p className="text-red-500 text-sm mt-1">{errors.ai_model}</p>}      </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">API Key</label>
         <input
@@ -316,6 +322,20 @@ const ModelForm: React.FC<ModelFormProps> = ({ model, onSave, onCancel }) => {
           placeholder="e.g., gsk_..."
           className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
         />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Temperature</label>
+        <input
+          type="number"
+          step="0.1"
+          min="0"
+          max="2"
+          value={formModel.config.temperature || ''}
+          onChange={(e) => handleInputChange('temperature', e.target.value)}
+          placeholder="e.g., 0.7 (0.0 - 2.0)"
+          className="mt-1 block w-full border border-gray-300 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500"
+        />
+        <p className="text-xs text-gray-500 mt-1">Controls randomness. Lower values (0.1) = more focused, Higher values (1.5) = more creative</p>
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Prompts</label>
@@ -371,11 +391,11 @@ const ModelDisplay: React.FC<ModelDisplayProps> = ({ model, onEdit, onDelete }) 
   }
 
   return (
-    <div className="space-y-4">
-      <div>
+    <div className="space-y-4">      <div>
         <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">{model.service || 'New Model'}</h3>
         <p className="text-gray-600 dark:text-gray-300">Provider: {model.config.ai_provider || 'N/A'}</p>
         <p className="text-gray-600 dark:text-gray-300">Model: {model.config.ai_model || 'N/A'}</p>
+        <p className="text-gray-600 dark:text-gray-300">Temperature: {model.config.temperature !== undefined ? model.config.temperature : 'Default (0.7)'}</p>
         <p className="text-gray-600 dark:text-gray-300 truncate">API Key: {model.config.api_key ? '••••' + model.config.api_key.slice(-4) : 'N/A'}</p>
       </div>
       <div className="flex space-x-4">

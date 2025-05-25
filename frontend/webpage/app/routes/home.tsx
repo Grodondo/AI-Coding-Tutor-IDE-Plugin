@@ -1,6 +1,8 @@
 import type { Route } from "./+types/home";
-import { useState, useEffect, useRef } from 'react';
-import { FiSend, FiRefreshCw, FiPlus, FiMessageSquare } from 'react-icons/fi';
+import { useState, useEffect, useRef, useContext } from 'react';
+import { Link } from 'react-router';
+import { FiSend, FiRefreshCw, FiPlus, FiMessageSquare, FiSettings, FiUser } from 'react-icons/fi';
+import { AuthContext } from '~/context/AuthContext';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -28,12 +30,140 @@ const CHATS_STORAGE_KEY = 'ai_chats';
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "AI Coding Tutor Chat" },
+    { title: "AI Coding Tutor" },
     { name: "description", content: "Interactive AI Coding Assistant" },
   ];
 }
 
-export default function Home() {
+// Landing page component for non-authenticated users
+function LandingPage() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+      <div className="container mx-auto px-4 py-16">
+        <div className="text-center">
+          <h1 className="text-5xl font-bold text-gray-900 dark:text-white mb-6">
+            AI Coding <span className="text-blue-600 dark:text-blue-400">Tutor</span>
+          </h1>
+          <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto">
+            Your intelligent programming companion. Get instant help with coding questions, 
+            debug issues, and learn best practices from our advanced AI assistant.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+            <Link
+              to="/auth/login"
+              className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+            >
+              Get Started
+            </Link>
+            <Link
+              to="/about"
+              className="px-8 py-3 border border-blue-600 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors font-semibold"
+            >
+              Learn More
+            </Link>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg">
+              <div className="text-blue-600 dark:text-blue-400 text-3xl mb-4">💡</div>
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                Instant Help
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                Get immediate answers to your coding questions and debug complex problems with AI assistance.
+              </p>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg">
+              <div className="text-blue-600 dark:text-blue-400 text-3xl mb-4">🎯</div>
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                Personalized Learning
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                Adaptive responses based on your skill level, from beginner to expert programming guidance.
+              </p>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg">
+              <div className="text-blue-600 dark:text-blue-400 text-3xl mb-4">⚡</div>
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                Fast & Accurate
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                Powered by advanced AI models to provide quick, accurate, and contextual programming assistance.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Admin dashboard component
+function AdminDashboard() {
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            Admin Dashboard
+          </h1>
+          <p className="text-gray-600 dark:text-gray-300">
+            Manage AI models, settings, and system configuration
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <Link
+            to="/admin/settings"
+            className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow border border-gray-200 dark:border-gray-700"
+          >
+            <div className="flex items-center mb-4">
+              <FiSettings className="text-2xl text-blue-600 dark:text-blue-400 mr-3" />
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                AI Settings
+              </h3>
+            </div>
+            <p className="text-gray-600 dark:text-gray-300">
+              Configure AI models, API keys, prompts, and temperature settings for different services.
+            </p>
+          </Link>
+
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center mb-4">
+              <FiUser className="text-2xl text-green-600 dark:text-green-400 mr-3" />
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                User Management
+              </h3>
+            </div>
+            <p className="text-gray-600 dark:text-gray-300">
+              View and manage user accounts, roles, and permissions.
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Coming soon</p>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center mb-4">
+              <FiMessageSquare className="text-2xl text-purple-600 dark:text-purple-400 mr-3" />
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Chat Analytics
+              </h3>
+            </div>
+            <p className="text-gray-600 dark:text-gray-300">
+              Monitor chat usage, popular queries, and system performance metrics.
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Coming soon</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Chat interface component for regular users
+function ChatInterface() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [input, setInput] = useState('');
@@ -93,6 +223,11 @@ export default function Home() {
     localStorage.setItem(CHATS_STORAGE_KEY, JSON.stringify(chats));
   }, [chats]);
 
+  // Scroll to bottom when new messages are added
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chats]);
+
   const createNewChat = () => {
     const newChat: Chat = {
       id: crypto.randomUUID(),
@@ -100,8 +235,50 @@ export default function Home() {
       messages: [],
       lastUpdated: new Date()
     };
-    setChats(prev => [newChat, ...prev]);
+    setChats([newChat, ...chats]);
     setCurrentChatId(newChat.id);
+  };
+
+  const loadRequestCount = () => {
+    const stored = localStorage.getItem(REQUEST_TRACKING_KEY);
+    if (stored) {
+      const data = JSON.parse(stored);
+      const oneHourAgo = Date.now() - 60 * 60 * 1000;
+      const recentRequests = data.requests.filter((timestamp: number) => timestamp > oneHourAgo);
+      setRequestsRemaining(Math.max(0, MAX_REQUESTS_PER_HOUR - recentRequests.length));
+    }
+  };
+
+  const updateRequestCount = () => {
+    const now = Date.now();
+    const oneHourAgo = now - 60 * 60 * 1000;
+
+    let data;
+    try {
+      const stored = localStorage.getItem(REQUEST_TRACKING_KEY);
+      data = stored ? JSON.parse(stored) : { requests: [] };
+    } catch {
+      data = { requests: [] };
+    }
+
+    const recentRequests = data.requests.filter((timestamp: number) => timestamp > oneHourAgo);
+    localStorage.setItem(REQUEST_TRACKING_KEY, JSON.stringify({ requests: recentRequests }));
+    setRequestsRemaining(Math.max(0, MAX_REQUESTS_PER_HOUR - recentRequests.length));
+  };
+
+  const trackRequest = () => {
+    const now = Date.now();
+    let data;
+    try {
+      const stored = localStorage.getItem(REQUEST_TRACKING_KEY);
+      data = stored ? JSON.parse(stored) : { requests: [] };
+    } catch {
+      data = { requests: [] };
+    }
+
+    data.requests.push(now);
+    localStorage.setItem(REQUEST_TRACKING_KEY, JSON.stringify(data));
+    updateRequestCount();
   };
 
   const getCurrentChat = () => {
@@ -119,29 +296,6 @@ export default function Home() {
       }
       return chat;
     }));
-  };
-
-  const loadRequestCount = () => {
-    const now = new Date();
-    const stored = localStorage.getItem(REQUEST_TRACKING_KEY);
-    if (stored) {
-      const requests = JSON.parse(stored);
-      // Filter requests from the last hour
-      const recentRequests = requests.filter((timestamp: string) => 
-        now.getTime() - new Date(timestamp).getTime() < 3600000
-      );
-      localStorage.setItem(REQUEST_TRACKING_KEY, JSON.stringify(recentRequests));
-      setRequestsRemaining(MAX_REQUESTS_PER_HOUR - recentRequests.length);
-    }
-  };
-
-  const trackRequest = () => {
-    const now = new Date();
-    const stored = localStorage.getItem(REQUEST_TRACKING_KEY);
-    const requests = stored ? JSON.parse(stored) : [];
-    requests.push(now.toISOString());
-    localStorage.setItem(REQUEST_TRACKING_KEY, JSON.stringify(requests));
-    loadRequestCount();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -343,4 +497,22 @@ export default function Home() {
       </div>
     </div>
   );
+}
+
+// Main component with authentication flow
+export default function Home() {
+  const { user } = useContext(AuthContext);
+
+  // Show landing page for non-authenticated users
+  if (!user) {
+    return <LandingPage />;
+  }
+
+  // Show admin dashboard for admin users
+  if (user.role === 'admin') {
+    return <AdminDashboard />;
+  }
+
+  // Show chat interface for regular users
+  return <ChatInterface />;
 }
