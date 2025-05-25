@@ -623,10 +623,10 @@ export function registerCommands(
             
             // Create a detailed suggestion request
             const query = `Suggest improvements for this ${language} code from ${fileName}:\n\n\`\`\`${language}\n${code}\n\`\`\`\n\nProvide specific, actionable improvements focusing on:
-1. Code quality and best practices
-2. Performance optimization
-3. Readability and maintainability
-4. Potential bugs or edge cases`;
+            1. Code quality and best practices
+            2. Performance optimization
+            3. Readability and maintainability
+            4. Potential bugs or edge cases`;
             
             // Add user message to chat
             state.chatHistory.push({

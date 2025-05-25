@@ -5,5 +5,3 @@ node_modules
 *.vsix
 .env
 
-frontend/webpage/*
-frontend/AI-Coding-Tutor-Webpage/*
