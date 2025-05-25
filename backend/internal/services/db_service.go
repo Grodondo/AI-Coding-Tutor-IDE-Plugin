@@ -61,7 +61,16 @@ func (s *DBService) CreateUser(user User) error {
 
 // DeleteSettings deletes settings for a specific service
 func (s *DBService) DeleteSettings(service string) error {
-	_, err := s.db.Exec("DELETE FROM settings WHERE service = $1", service)
+	// Check if the service is marked as default
+	isDefault, err := s.IsDefaultService(service)
+	if err != nil {
+		return fmt.Errorf("failed to check if service is default: %v", err)
+	}
+	if isDefault {
+		return fmt.Errorf("cannot delete default service: %s", service)
+	}
+
+	_, err = s.db.Exec("DELETE FROM settings WHERE service = $1", service)
 	if err != nil {
 		return fmt.Errorf("failed to delete settings: %v", err)
 	}
@@ -169,4 +178,14 @@ func (s *DBService) GetUserProfile(username string) (*User, error) {
 	}
 
 	return &user, nil
+}
+
+// IsDefaultService checks if a service is marked as default (cannot be deleted)
+func (s *DBService) IsDefaultService(service string) (bool, error) {
+	var isDefault bool
+	err := s.db.QueryRow("SELECT is_default FROM settings WHERE service = $1", service).Scan(&isDefault)
+	if err != nil {
+		return false, fmt.Errorf("failed to check if service is default: %v", err)
+	}
+	return isDefault, nil
 }

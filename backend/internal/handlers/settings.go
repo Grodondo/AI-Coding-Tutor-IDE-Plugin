@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/logger"
-	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/models"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/services"
 	"github.com/Grodondo/AI-Coding-Tutor-IDE-Plugin/backend/internal/utils"
 	"github.com/gin-gonic/gin"
@@ -29,6 +28,8 @@ type ServiceConfig struct {
 		// raw API key; server will encrypt this
 		// required: true
 		APIKey string `json:"api_key"`
+		// AI model temperature
+		Temperature *float64 `json:"temperature,omitempty"`
 		// named prompts
 		Prompts map[string]string `json:"prompts"`
 	} `json:"config"`
@@ -170,16 +171,21 @@ func DeleteSettingsHandler(dbService *services.DBService, settingsService *servi
 			c.JSON(400, gin.H{"error": "Service name is required"})
 			return
 		}
-
-		// Validate the service name
-		if service == string(models.QueryService) || service == string(models.AnalyzeService) {
-			logger.Log.Warnf("Attempted to delete protected service settings: %s", service)
-			c.JSON(400, gin.H{"error": "Cannot delete settings for query or analyze service"})
+		// Validate the service name and check if it's protected
+		isDefault, err := dbService.IsDefaultService(service)
+		if err != nil {
+			logger.Log.Errorf("Failed to check if service is default: %v", err)
+			c.JSON(500, gin.H{"error": "Failed to validate service"})
+			return
+		}
+		if isDefault {
+			logger.Log.Warnf("Attempted to delete protected default service: %s", service)
+			c.JSON(400, gin.H{"error": "Cannot delete default system services (query and analyze)"})
 			return
 		}
 
 		// Delete the setting from the database
-		err := dbService.DeleteSettings(service)
+		err = dbService.DeleteSettings(service)
 		if err != nil {
 			logger.Log.Errorf("Failed to delete settings for %s: %v", service, err)
 			c.JSON(500, gin.H{"error": "Failed to delete settings"})

@@ -14,6 +14,7 @@ type AiSettings struct {
 	AIModel         string            `json:"ai_model"`
 	EncryptedAPIKey string            `json:"encrypted_api_key"`
 	APIKey          string            // Decrypted, not stored in DB
+	Temperature     *float64          `json:"temperature,omitempty"` // AI model temperature
 	Prompts         map[string]string `json:"prompts"`
 }
 

@@ -30,9 +30,9 @@ func (s *AIService) GetResponse(service string, provider string, model string, p
 
 	switch provider {
 	case "groq":
-		return s.GetResponseGeneral(settings.APIKey, model, prompt, "https://api.groq.com/openai/v1/chat/completions", nil)
+		return s.GetResponseGeneral(settings.APIKey, model, prompt, "https://api.groq.com/openai/v1/chat/completions", settings.Temperature)
 	case "openai":
-		return s.GetResponseGeneral(settings.APIKey, model, prompt, "https://api.openai.com/v1/chat/completions", nil)
+		return s.GetResponseGeneral(settings.APIKey, model, prompt, "https://api.openai.com/v1/chat/completions", settings.Temperature)
 	default:
 		return "", fmt.Errorf("unknown provider: %s", provider)
 	}

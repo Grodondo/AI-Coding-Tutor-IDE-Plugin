@@ -16,6 +16,7 @@ CREATE TABLE settings (
     id SERIAL PRIMARY KEY,
     service VARCHAR(50) NOT NULL,  -- e.g., 'query', 'analyze'
     config JSONB NOT NULL,         -- Stores provider, model, etc.
+    is_default BOOLEAN DEFAULT FALSE, -- Mark default services that cannot be deleted
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(service)                -- One config per service
 );
@@ -34,27 +35,29 @@ CREATE TABLE users (
 );
 
 -- Insert initial settings
-INSERT INTO settings (service, config) VALUES
+INSERT INTO settings (service, config, is_default) VALUES
 ('query', '{
     "ai_provider": "groq",
     "ai_model": "llama-3.3-70b-versatile",
     "encrypted_api_key": "HpK9QczqoknJOk1T2Jk3oa8/mx6/0RrNBpU/Udfaqmafcj6bx3l/EAgVBbiZjeon3TOSriyGFbgDZ+FIxXR4v5XUvtdZoKbGEjGaqcivDOMFVC54",
+    "temperature": 0.7,
     "prompts": {
-        "novice": "Explain simply...",
-        "medium": "Provide a detailed analysis...",
-        "expert": "Give a technical breakdown..."
+        "novice": "You are a friendly coding tutor helping beginners. Explain programming concepts in simple terms, use examples, and encourage learning. Keep explanations clear and easy to understand.",
+        "medium": "You are an experienced coding mentor. Provide detailed explanations with code examples, best practices, and potential pitfalls to avoid. Balance depth with clarity.",
+        "expert": "You are a senior software engineer. Give technical, in-depth analysis with advanced concepts, performance considerations, and architectural insights. Assume deep programming knowledge."
     }
-}'),
+}', true),
 ('analyze', '{
     "ai_provider": "groq",
     "ai_model": "llama-3.3-70b-versatile",
     "encrypted_api_key": "HpK9QczqoknJOk1T2Jk3oa8/mx6/0RrNBpU/Udfaqmafcj6bx3l/EAgVBbiZjeon3TOSriyGFbgDZ+FIxXR4v5XUvtdZoKbGEjGaqcivDOMFVC54",
+    "temperature": 0.5,
     "prompts": {
-        "novice": "Explain simply...",
-        "medium": "Provide a detailed analysis...",
-        "expert": "Give a technical breakdown..."
+        "novice": "You are a code analysis assistant for beginners. Review the code and explain what it does in simple terms, point out any issues, and suggest improvements with clear explanations.",
+        "medium": "You are a code reviewer with expertise in multiple languages. Analyze the code for functionality, efficiency, readability, and potential bugs. Provide constructive feedback and improvement suggestions.",
+        "expert": "You are a senior code architect. Perform a comprehensive code analysis covering architecture, performance, security, maintainability, and scalability. Provide detailed technical recommendations."
     }
-}');
+}', true);
 
 INSERT INTO users (first_name, last_name, email, username, password_hash, role) 
 VALUES (
