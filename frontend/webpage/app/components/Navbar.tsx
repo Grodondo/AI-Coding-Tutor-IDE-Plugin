@@ -3,9 +3,7 @@ import { useState, useContext } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router';
 import { AuthContext } from '../context/AuthContext';
 import { logger } from '../utils/logger';
-import { useTheme } from '../context/ThemeContext';
 import { 
-    FaBell, 
     FaChevronDown, 
     FaUser, 
     FaCog, 
@@ -17,11 +15,9 @@ import {
     FaCogs
 } from 'react-icons/fa';
 
-export const Navbar = () => {
-  const { user, logout } = useContext(AuthContext);
+export const Navbar = () => {  const { user, logout } = useContext(AuthContext);
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
-  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const handleSignOut = () => {
@@ -104,20 +100,10 @@ export const Navbar = () => {
                 </Link>
               </>
             )}
-          </div>
-
-          <div className="flex items-center space-x-4">
+          </div>          <div className="flex items-center space-x-4">
             {/* User Profile or Auth Button */}
             {user ? (
               <div className="flex items-center space-x-3">
-                {/* Notifications */}
-                <button className="relative p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
-                  <FaBell className="text-lg" />
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    3
-                  </span>
-                </button>
-
                 {/* Profile Dropdown */}
                 <div className="relative">
                   <button
@@ -194,31 +180,14 @@ export const Navbar = () => {
                     </div>
                   )}
                 </div>
-              </div>
-            ) : (              <Link
+              </div>            ) : (
+              <Link
                 to="/auth/login"
                 className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-2 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
               >
                 Sign In
               </Link>
             )}
-
-            {/* Theme Toggle Button */}
-            <button
-              onClick={toggleTheme}
-              className="p-3 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none transition-colors duration-200 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800"
-              aria-label="Toggle theme"
-            >
-              {theme === 'light' ? (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-              )}
-            </button>
 
             {/* Mobile Menu Button */}
             <button

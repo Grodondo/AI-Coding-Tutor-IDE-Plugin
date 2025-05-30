@@ -1,14 +1,11 @@
 'use client';
 import { useState, useEffect, useContext } from 'react';
-import { useNavigate } from 'react-router';
 import { AuthContext } from '../../context/AuthContext';
 import { 
     FaUser, 
     FaEnvelope, 
     FaKey, 
-    FaSignOutAlt, 
     FaEdit, 
-    FaCog, 
     FaCalendarAlt,
     FaCrown,
     FaShieldAlt
@@ -23,12 +20,9 @@ interface UserProfile {
     createdAt: string;
 }
 
-export default function Profile() {
-    const [profile, setProfile] = useState<UserProfile | null>(null);
+export default function Profile() {    const [profile, setProfile] = useState<UserProfile | null>(null);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(true);
-    const { logout } = useContext(AuthContext);
-    const navigate = useNavigate();
 
     useEffect(() => {
         const fetchProfile = async () => {
@@ -51,15 +45,8 @@ export default function Profile() {
             } finally {
                 setIsLoading(false);
             }
-        };
-
-        fetchProfile();
+        };        fetchProfile();
     }, []);
-
-    const handleLogout = () => {
-        logout();
-        navigate('/auth/login');
-    };
 
     if (isLoading) {
         return (
@@ -112,147 +99,116 @@ export default function Profile() {
                             </>
                         )}
                     </p>
-                </div>
-
-                {/* Main Content Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                </div>                {/* Main Content */}
+                <div className="max-w-2xl mx-auto space-y-6">
                     {/* Profile Information Card */}
-                    <div className="lg:col-span-2">
-                        <div className="bg-white dark:bg-gray-800 shadow-xl rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
-                            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4">
-                                <h3 className="text-xl font-bold text-white flex items-center">
-                                    <FaUser className="mr-3" />
-                                    Profile Information
-                                </h3>
-                                <p className="text-blue-100 text-sm mt-1">
-                                    Manage your account details and preferences
-                                </p>
-                            </div>
-                            <div className="p-6">
-                                <div className="space-y-6">
-                                    <div className="flex items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                                        <div className="bg-blue-100 dark:bg-blue-900 p-3 rounded-lg">
-                                            <FaUser className="text-blue-600 dark:text-blue-400" />
-                                        </div>
-                                        <div className="ml-4 flex-1">
-                                            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                                                Full Name
-                                            </dt>
-                                            <dd className="text-lg font-semibold text-gray-900 dark:text-white">
-                                                {profile.firstName} {profile.lastName}
-                                            </dd>
-                                        </div>
-                                        <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                                            <FaEdit />
-                                        </button>
+                    <div className="bg-white dark:bg-gray-800 shadow-xl rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+                        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4">
+                            <h3 className="text-xl font-bold text-white flex items-center">
+                                <FaUser className="mr-3" />
+                                Profile Information
+                            </h3>
+                            <p className="text-blue-100 text-sm mt-1">
+                                Manage your account details and preferences
+                            </p>
+                        </div>
+                        <div className="p-6">
+                            <div className="space-y-6">
+                                <div className="flex items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                                    <div className="bg-blue-100 dark:bg-blue-900 p-3 rounded-lg">
+                                        <FaUser className="text-blue-600 dark:text-blue-400" />
                                     </div>
-
-                                    <div className="flex items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                                        <div className="bg-green-100 dark:bg-green-900 p-3 rounded-lg">
-                                            <FaEnvelope className="text-green-600 dark:text-green-400" />
-                                        </div>
-                                        <div className="ml-4 flex-1">
-                                            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                                                Email Address
-                                            </dt>
-                                            <dd className="text-lg font-semibold text-gray-900 dark:text-white">
-                                                {profile.email}
-                                            </dd>
-                                        </div>
-                                        <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                                            <FaEdit />
-                                        </button>
+                                    <div className="ml-4 flex-1">
+                                        <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Full Name
+                                        </dt>
+                                        <dd className="text-lg font-semibold text-gray-900 dark:text-white">
+                                            {profile.firstName} {profile.lastName}
+                                        </dd>
                                     </div>
+                                    <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                                        <FaEdit />
+                                    </button>
+                                </div>
 
-                                    <div className="flex items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                                        <div className="bg-purple-100 dark:bg-purple-900 p-3 rounded-lg">
-                                            <FaKey className="text-purple-600 dark:text-purple-400" />
-                                        </div>
-                                        <div className="ml-4 flex-1">
-                                            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                                                Username
-                                            </dt>
-                                            <dd className="text-lg font-semibold text-gray-900 dark:text-white">
-                                                {profile.username}
-                                            </dd>
-                                        </div>
-                                        <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-                                            <FaEdit />
-                                        </button>
+                                <div className="flex items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                                    <div className="bg-green-100 dark:bg-green-900 p-3 rounded-lg">
+                                        <FaEnvelope className="text-green-600 dark:text-green-400" />
                                     </div>
+                                    <div className="ml-4 flex-1">
+                                        <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Email Address
+                                        </dt>
+                                        <dd className="text-lg font-semibold text-gray-900 dark:text-white">
+                                            {profile.email}
+                                        </dd>
+                                    </div>
+                                    <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                                        <FaEdit />
+                                    </button>
+                                </div>
 
-                                    <div className="flex items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                                        <div className="bg-orange-100 dark:bg-orange-900 p-3 rounded-lg">
-                                            <FaCalendarAlt className="text-orange-600 dark:text-orange-400" />
-                                        </div>
-                                        <div className="ml-4 flex-1">
-                                            <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                                                Member Since
-                                            </dt>
-                                            <dd className="text-lg font-semibold text-gray-900 dark:text-white">
-                                                {new Date(profile.createdAt).toLocaleDateString('en-US', {
-                                                    year: 'numeric',
-                                                    month: 'long',
-                                                    day: 'numeric'
-                                                })}
-                                            </dd>
-                                        </div>
+                                <div className="flex items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                                    <div className="bg-purple-100 dark:bg-purple-900 p-3 rounded-lg">
+                                        <FaKey className="text-purple-600 dark:text-purple-400" />
+                                    </div>
+                                    <div className="ml-4 flex-1">
+                                        <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Username
+                                        </dt>
+                                        <dd className="text-lg font-semibold text-gray-900 dark:text-white">
+                                            {profile.username}
+                                        </dd>
+                                    </div>
+                                    <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                                        <FaEdit />
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
+                                    <div className="bg-orange-100 dark:bg-orange-900 p-3 rounded-lg">
+                                        <FaCalendarAlt className="text-orange-600 dark:text-orange-400" />
+                                    </div>
+                                    <div className="ml-4 flex-1">
+                                        <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                            Member Since
+                                        </dt>
+                                        <dd className="text-lg font-semibold text-gray-900 dark:text-white">
+                                            {new Date(profile.createdAt).toLocaleDateString('en-US', {
+                                                year: 'numeric',
+                                                month: 'long',
+                                                day: 'numeric'
+                                            })}
+                                        </dd>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Quick Actions Sidebar */}
-                    <div className="space-y-6">
-                        {/* Account Actions */}
-                        <div className="bg-white dark:bg-gray-800 shadow-xl rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
-                            <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-4">
-                                <h3 className="text-lg font-bold text-white flex items-center">
-                                    <FaCog className="mr-2" />
-                                    Quick Actions
-                                </h3>
-                            </div>
-                            <div className="p-6 space-y-4">
-                                <button className="w-full flex items-center justify-center px-4 py-3 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors font-medium">
-                                    <FaEdit className="mr-2" />
-                                    Edit Profile
-                                </button>
-                                <button className="w-full flex items-center justify-center px-4 py-3 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors font-medium">
-                                    <FaCog className="mr-2" />
-                                    Settings
-                                </button>
-                                <button
-                                    onClick={handleLogout}
-                                    className="w-full flex items-center justify-center px-4 py-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors font-medium"
-                                >
-                                    <FaSignOutAlt className="mr-2" />
-                                    Sign Out
-                                </button>
-                            </div>
+                    {/* Account Stats */}
+                    <div className="bg-white dark:bg-gray-800 shadow-xl rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+                        <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4">
+                            <h3 className="text-xl font-bold text-white">Account Stats</h3>
+                            <p className="text-purple-100 text-sm mt-1">
+                                Your activity overview
+                            </p>
                         </div>
-
-                        {/* Account Stats */}
-                        <div className="bg-white dark:bg-gray-800 shadow-xl rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
-                            <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-6 py-4">
-                                <h3 className="text-lg font-bold text-white">Account Stats</h3>
-                            </div>
-                            <div className="p-6">
-                                <div className="space-y-4">
-                                    <div className="text-center">
-                                        <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                                            {Math.floor((Date.now() - new Date(profile.createdAt).getTime()) / (1000 * 60 * 60 * 24))}
-                                        </div>
-                                        <div className="text-sm text-gray-600 dark:text-gray-400">Days Active</div>
+                        <div className="p-6">
+                            <div className="grid grid-cols-3 gap-6">
+                                <div className="text-center">
+                                    <div className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+                                        {Math.floor((Date.now() - new Date(profile.createdAt).getTime()) / (1000 * 60 * 60 * 24))}
                                     </div>
-                                    <div className="text-center">
-                                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">0</div>
-                                        <div className="text-sm text-gray-600 dark:text-gray-400">Chat Sessions</div>
-                                    </div>
-                                    <div className="text-center">
-                                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">0</div>
-                                        <div className="text-sm text-gray-600 dark:text-gray-400">Problems Solved</div>
-                                    </div>
+                                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Days Active</div>
+                                </div>
+                                <div className="text-center">
+                                    <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">0</div>
+                                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Chat Sessions</div>
+                                </div>
+                                <div className="text-center">
+                                    <div className="text-3xl font-bold text-green-600 dark:text-green-400">0</div>
+                                    <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Problems Solved</div>
                                 </div>
                             </div>
                         </div>
