@@ -106,6 +106,11 @@ func main() {
 	router.POST("api/v1/login", handlers.LoginHandler(dbService))
 	router.POST("api/v1/register", handlers.RegisterHandler(dbService))
 
+	// Admin routes
+	router.GET("api/v1/admin/users", middleware.AdminMiddleware(dbService), handlers.GetAllUsersHandler(dbService))
+	router.PUT("api/v1/admin/users/:id/role", middleware.AdminMiddleware(dbService), handlers.UpdateUserRoleHandler(dbService))
+	router.DELETE("api/v1/admin/users/:id", middleware.AdminMiddleware(dbService), handlers.DeleteUserHandler(dbService))
+
 	// Social auth routes
 	/*
 		router.GET("api/v1/auth/google", handlers.GoogleAuthHandler)

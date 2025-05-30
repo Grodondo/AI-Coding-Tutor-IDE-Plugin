@@ -11,6 +11,7 @@ import (
 
 // User represents a user in the system
 type User struct {
+	ID           int
 	FirstName    string
 	LastName     string
 	Email        string
@@ -18,6 +19,7 @@ type User struct {
 	PasswordHash string
 	Role         string
 	CreatedAt    time.Time
+	LastLogin    time.Time
 }
 
 // DBService holds the database connection
@@ -158,16 +160,19 @@ func (s *DBService) UpdateFeedback(id, feedback string) error {
 func (s *DBService) GetUserProfile(username string) (*User, error) {
 	var user User
 	err := s.db.QueryRow(`
-		SELECT first_name, last_name, email, username, role, created_at
+		SELECT id, first_name, last_name, email, username, role, created_at,
+		       COALESCE(last_login, '1970-01-01'::timestamp) as last_login
 		FROM users
 		WHERE username = $1
 	`, username).Scan(
+		&user.ID,
 		&user.FirstName,
 		&user.LastName,
 		&user.Email,
 		&user.Username,
 		&user.Role,
 		&user.CreatedAt,
+		&user.LastLogin,
 	)
 
 	if err != nil {
@@ -188,4 +193,67 @@ func (s *DBService) IsDefaultService(service string) (bool, error) {
 		return false, fmt.Errorf("failed to check if service is default: %v", err)
 	}
 	return isDefault, nil
+}
+
+// GetAllUsers retrieves all users for admin management
+func (s *DBService) GetAllUsers() ([]User, error) {
+	rows, err := s.db.Query(`
+		SELECT id, first_name, last_name, email, username, role, created_at, 
+		       COALESCE(last_login, '1970-01-01'::timestamp) as last_login
+		FROM users 
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all users: %v", err)
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var user User
+		err := rows.Scan(
+			&user.ID,
+			&user.FirstName,
+			&user.LastName,
+			&user.Email,
+			&user.Username,
+			&user.Role,
+			&user.CreatedAt,
+			&user.LastLogin,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan user: %v", err)
+		}
+		users = append(users, user)
+	}
+
+	return users, nil
+}
+
+// UpdateUserRole updates a user's role
+func (s *DBService) UpdateUserRole(userID int, role string) error {
+	_, err := s.db.Exec(
+		"UPDATE users SET role = $1 WHERE id = $2",
+		role, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update user role: %v", err)
+	}
+	return nil
+}
+
+// DeleteUser deletes a user by ID
+func (s *DBService) DeleteUser(userID int) error {
+	// First delete any related data (queries, feedback, etc.)
+	_, err := s.db.Exec("DELETE FROM queries WHERE user_id = $1", userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete user queries: %v", err)
+	}
+
+	// Then delete the user
+	_, err = s.db.Exec("DELETE FROM users WHERE id = $1", userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete user: %v", err)
+	}
+	return nil
 }
