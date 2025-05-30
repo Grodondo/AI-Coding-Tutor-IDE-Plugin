@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -61,17 +62,25 @@ func (s *AIService) GetResponseGeneral(apiKey string, model string, prompt strin
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
-
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 
+	// Check HTTP status code
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("AI service returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", err
 	}
+
+	// Log the full response for debugging
+	fmt.Printf("AI Response: %+v\n", result)
 
 	// Extract response content
 	choices, ok := result["choices"].([]interface{})

@@ -297,9 +297,8 @@ export default function Home() {
   if (!user) {
     return <LandingPage />;
   }
-
-  // Show admin dashboard for admin users
-  if (user.role === 'admin') {
+  // Show admin dashboard for admin and superadmin users
+  if (user.role === 'admin' || user.role === 'superadmin') {
     return <AdminDashboard />;
   }
 

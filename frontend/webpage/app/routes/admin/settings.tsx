@@ -26,10 +26,9 @@ export default function AdminSettings() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
-
   useEffect(() => {
     logger.info('AdminSettings: Checking user role', { user });
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
       logger.warn('AdminSettings: Unauthorized access, redirecting');
       navigate('/auth/login');
     }
@@ -87,9 +86,8 @@ export default function AdminSettings() {
       setIsLoading(false);
     }
   };
-
   useEffect(() => {
-    if (user && user.role === 'admin') {
+    if (user && (user.role === 'admin' || user.role === 'superadmin')) {
       logger.info('AdminSettings: Initializing fetchModels');
       fetchModels();
     }

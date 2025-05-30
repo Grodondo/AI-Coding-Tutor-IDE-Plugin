@@ -85,12 +85,16 @@ export default function Profile() {    const [profile, setProfile] = useState<Us
                     </div>
                     <h1 className="mt-4 text-3xl font-bold text-gray-900 dark:text-white">
                         {profile.firstName} {profile.lastName}
-                    </h1>
-                    <p className="text-gray-600 dark:text-gray-400 flex items-center justify-center mt-2">
+                    </h1>                    <p className="text-gray-600 dark:text-gray-400 flex items-center justify-center mt-2">
                         {profile.role === 'admin' ? (
                             <>
                                 <FaCrown className="mr-2 text-yellow-500" />
                                 Administrator
+                            </>
+                        ) : profile.role === 'superadmin' ? (
+                            <>
+                                <FaCrown className="mr-2 text-red-500" />
+                                Super Administrator
                             </>
                         ) : (
                             <>

@@ -80,9 +80,8 @@ export const Navbar = () => {  const { user, logout } = useContext(AuthContext);
                 {isActiveRoute('/chat') && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full"></div>
                 )}
-              </Link>
-            )}
-            {user?.role === 'admin' && (
+              </Link>            )}
+            {(user?.role === 'admin' || user?.role === 'superadmin') && (
               <>
                 <Link to="/admin/settings" className={navLinkClass('/admin/settings')}>
                   <FaCogs className="mr-2 text-sm" />
@@ -252,9 +251,8 @@ export const Navbar = () => {  const { user, logout } = useContext(AuthContext);
                     <FaComments className="mr-3 text-sm" />
                     Chat
                   </div>
-                </Link>
-              )}
-              {user?.role === 'admin' && (
+                </Link>              )}
+              {(user?.role === 'admin' || user?.role === 'superadmin') && (
                 <>
                   <Link
                     to="/admin/settings"

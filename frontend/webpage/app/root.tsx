@@ -52,15 +52,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
 function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useContext(AuthContext);
-
-  useEffect(() => {
+  const { user } = useContext(AuthContext);    useEffect(() => {
     console.log('AppContent: Checking admin route', {
       pathname: location.pathname,
       user,
-      isAdmin: user?.role === 'admin',
+      isAdmin: user?.role === 'admin' || user?.role === 'superadmin',
     });
-    if (location.pathname.startsWith('/admin') && user?.role !== 'admin') {
+    if (location.pathname.startsWith('/admin') && user?.role !== 'admin' && user?.role !== 'superadmin') {
       console.log('AppContent: Redirecting to /auth/login');
       navigate('/auth/login');
     }
