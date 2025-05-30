@@ -131,17 +131,30 @@ export default function Chat() {
     setChats([newChat, ...chats]);
     setCurrentChatId(newChat.id);
   };
-
   const loadRequestCount = () => {
     const stored = localStorage.getItem(REQUEST_TRACKING_KEY);
     if (stored) {
-      const data = JSON.parse(stored);
-      const oneHourAgo = Date.now() - 60 * 60 * 1000;
-      const recentRequests = data.requests.filter((timestamp: number) => timestamp > oneHourAgo);
-      setRequestsRemaining(Math.max(0, MAX_REQUESTS_PER_HOUR - recentRequests.length));
+      try {
+        const data = JSON.parse(stored);
+        // Ensure data and data.requests exist and data.requests is an array
+        if (data && Array.isArray(data.requests)) {
+          const oneHourAgo = Date.now() - 60 * 60 * 1000;
+          const recentRequests = data.requests.filter((timestamp: number) => timestamp > oneHourAgo);
+          setRequestsRemaining(Math.max(0, MAX_REQUESTS_PER_HOUR - recentRequests.length));
+        } else {
+          // Initialize with empty requests array if data is malformed
+          setRequestsRemaining(MAX_REQUESTS_PER_HOUR);
+        }
+      } catch (error) {
+        // If JSON parsing fails, reset to default
+        console.error('Failed to parse request tracking data:', error);
+        setRequestsRemaining(MAX_REQUESTS_PER_HOUR);
+      }
+    } else {
+      // No stored data, set to maximum
+      setRequestsRemaining(MAX_REQUESTS_PER_HOUR);
     }
   };
-
   const updateRequestCount = () => {
     const now = Date.now();
     const oneHourAgo = now - 60 * 60 * 1000;
@@ -150,6 +163,10 @@ export default function Chat() {
     try {
       const stored = localStorage.getItem(REQUEST_TRACKING_KEY);
       data = stored ? JSON.parse(stored) : { requests: [] };
+      // Ensure data.requests is an array
+      if (!Array.isArray(data.requests)) {
+        data = { requests: [] };
+      }
     } catch {
       data = { requests: [] };
     }
@@ -158,13 +175,16 @@ export default function Chat() {
     localStorage.setItem(REQUEST_TRACKING_KEY, JSON.stringify({ requests: recentRequests }));
     setRequestsRemaining(Math.max(0, MAX_REQUESTS_PER_HOUR - recentRequests.length));
   };
-
   const trackRequest = () => {
     const now = Date.now();
     let data;
     try {
       const stored = localStorage.getItem(REQUEST_TRACKING_KEY);
       data = stored ? JSON.parse(stored) : { requests: [] };
+      // Ensure data.requests is an array
+      if (!Array.isArray(data.requests)) {
+        data = { requests: [] };
+      }
     } catch {
       data = { requests: [] };
     }

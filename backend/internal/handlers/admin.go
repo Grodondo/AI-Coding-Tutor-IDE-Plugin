@@ -134,12 +134,26 @@ func DeleteUserHandler(dbService *services.DBService) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
 			return
 		}
-
 		// Get current user from context (set by auth middleware)
 		currentUsername, exists := c.Get("username")
 		if !exists {
 			logger.Log.Error("DeleteUserHandler: Username not found in context")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		// Get current user role from context
+		currentRole, exists := c.Get("role")
+		if !exists {
+			logger.Log.Error("DeleteUserHandler: Role not found in context")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		// Only superadmin can delete users
+		if currentRole.(string) != "superadmin" {
+			logger.Log.Warnf("DeleteUserHandler: Non-superadmin user %s trying to delete user", currentUsername.(string))
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only superadmin can delete users"})
 			return
 		}
 

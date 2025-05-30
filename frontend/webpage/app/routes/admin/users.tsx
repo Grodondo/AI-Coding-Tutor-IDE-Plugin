@@ -123,8 +123,13 @@ export default function UserManagement() {
       setError('An error occurred while updating the user role.');
     }
   };
-
   const handleDeleteUser = async (userId: number) => {
+    // Check if current user is superadmin
+    if (currentUser?.role !== 'superadmin') {
+      setError('Only superadmin users can delete users.');
+      return;
+    }
+
     if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
       return;
     }
@@ -180,6 +185,20 @@ export default function UserManagement() {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  // Helper function to determine if role dropdown should be disabled
+  const isRoleChangeDisabled = (targetUser: User) => {
+    if (currentUser?.role === 'superadmin') {
+      return false; // Superadmin can change any role
+    }
+    
+    if (currentUser?.role === 'admin') {
+      // Admin cannot modify superadmin users or demote other admin users
+      return targetUser.role === 'superadmin';
+    }
+    
+    return true; // Regular users should not have access to this page anyway
   };
 
   return (
@@ -297,37 +316,63 @@ export default function UserManagement() {
                             </div>
                           </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">                        <select
-                          value={user.role}
-                          onChange={(e) => handleRoleChange(user.id, e.target.value, user.role)}
-                          className={`text-sm px-3 py-1 rounded-full border-0 focus:ring-2 focus:ring-blue-500 ${
-                            user.role === 'superadmin'
-                              ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                              : user.role === 'admin' 
-                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' 
-                              : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                          }`}                        >
-                          <option value="user">User</option>
-                          <option value="admin">Admin</option>
-                          {currentUser?.role === 'superadmin' && <option value="superadmin">Superadmin</option>}
-                        </select>
-                      </td>                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                      </td>                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center space-x-2">
+                          <select
+                            value={user.role}
+                            onChange={(e) => handleRoleChange(user.id, e.target.value, user.role)}
+                            className={`text-sm px-3 py-1 rounded-full border-0 focus:ring-2 focus:ring-blue-500 transition-all ${
+                              isRoleChangeDisabled(user)
+                                ? 'opacity-50 cursor-not-allowed'
+                                : 'cursor-pointer hover:shadow-sm'
+                            } ${
+                              user.role === 'superadmin'
+                                ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                : user.role === 'admin' 
+                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' 
+                                : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                            }`}
+                            disabled={isRoleChangeDisabled(user)}
+                            title={isRoleChangeDisabled(user) ? 'You do not have permission to modify this user\'s role' : 'Change user role'}
+                          >
+                            <option value="user">User</option>
+                            <option value="admin">Admin</option>
+                            {currentUser?.role === 'superadmin' && <option value="superadmin">Superadmin</option>}
+                          </select>                          {isRoleChangeDisabled(user) && (
+                            <div title="Role modification restricted">
+                              <svg 
+                                className="w-4 h-4 text-gray-400 dark:text-gray-500" 
+                                fill="currentColor" 
+                                viewBox="0 0 20 20"
+                              >
+                                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                      </td><td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                         {formatDate(user.createdAt)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                        {user.lastLogin ? formatDate(user.lastLogin) : 'Never'}
-                      </td>
+                        {user.lastLogin ? formatDate(user.lastLogin) : 'Never'}                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => handleDeleteUser(user.id)}
-                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 transition-colors"
-                          title="Delete User"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        {currentUser?.role === 'superadmin' ? (
+                          <button
+                            onClick={() => handleDeleteUser(user.id)}
+                            className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                            title="Delete User"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        ) : (
+                          <span className="text-gray-400 dark:text-gray-500" title="Only superadmin can delete users">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
