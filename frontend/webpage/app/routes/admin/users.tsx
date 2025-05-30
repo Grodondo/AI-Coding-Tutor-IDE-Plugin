@@ -122,11 +122,17 @@ export default function UserManagement() {
       logger.error('UserManagement: Error updating user role', error);
       setError('An error occurred while updating the user role.');
     }
-  };
-  const handleDeleteUser = async (userId: number) => {
+  };  const handleDeleteUser = async (userId: number) => {
     // Check if current user is superadmin
     if (currentUser?.role !== 'superadmin') {
       setError('Only superadmin users can delete users.');
+      return;
+    }
+
+    // Find the target user to check if it's the current user
+    const targetUser = users.find(u => u.id === userId);
+    if (targetUser && currentUser?.username === targetUser.username) {
+      setError('You cannot delete your own account.');
       return;
     }
 
@@ -185,20 +191,36 @@ export default function UserManagement() {
       hour: '2-digit',
       minute: '2-digit'
     });
-  };
-
-  // Helper function to determine if role dropdown should be disabled
+  };  // Helper function to determine if role dropdown should be disabled
   const isRoleChangeDisabled = (targetUser: User) => {
+    // Users cannot change their own role (compare by username since currentUser doesn't have id)
+    if (currentUser?.username === targetUser.username) {
+      return true;
+    }
+    
     if (currentUser?.role === 'superadmin') {
-      return false; // Superadmin can change any role
+      return false; // Superadmin can change any role (except their own)
     }
     
     if (currentUser?.role === 'admin') {
-      // Admin cannot modify superadmin users or demote other admin users
+      // Admin cannot modify superadmin users
       return targetUser.role === 'superadmin';
     }
     
     return true; // Regular users should not have access to this page anyway
+  };
+
+  // Helper function to get tooltip message for disabled role changes
+  const getRoleChangeTooltip = (targetUser: User) => {
+    if (currentUser?.username === targetUser.username) {
+      return 'You cannot change your own role';
+    }
+    
+    if (currentUser?.role === 'admin' && targetUser.role === 'superadmin') {
+      return 'Admin users cannot modify superadmin users';
+    }
+    
+    return 'You do not have permission to modify this user\'s role';
   };
 
   return (
@@ -248,7 +270,6 @@ export default function UserManagement() {
                 <option value="all">All Roles</option>
                 <option value="admin">Admin</option>
                 <option value="user">User</option>
-                <option value="superadmin">Superadmin</option>
               </select>
             </div>
           </div>
@@ -294,19 +315,31 @@ export default function UserManagement() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">                  {filteredUsers.map((user) => (
+                    <tr 
+                      key={user.id} 
+                      className={`transition-colors ${
+                        currentUser?.username === user.username
+                          ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30'
+                          : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
+                    >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="flex-shrink-0 h-10 w-10">
                             <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold">
                               {user.firstName[0]}{user.lastName[0]}
                             </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">
-                              {user.firstName} {user.lastName}
+                          </div>                          <div className="ml-4">
+                            <div className="flex items-center gap-2">
+                              <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                {user.firstName} {user.lastName}
+                              </div>
+                              {currentUser?.username === user.username && (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                  You
+                                </span>
+                              )}
                             </div>
                             <div className="text-sm text-gray-500 dark:text-gray-300">
                               {user.email}
@@ -331,15 +364,13 @@ export default function UserManagement() {
                                 : user.role === 'admin' 
                                 ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' 
                                 : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                            }`}
-                            disabled={isRoleChangeDisabled(user)}
-                            title={isRoleChangeDisabled(user) ? 'You do not have permission to modify this user\'s role' : 'Change user role'}
+                            }`}                            disabled={isRoleChangeDisabled(user)}
+                            title={isRoleChangeDisabled(user) ? getRoleChangeTooltip(user) : 'Change user role'}
                           >
                             <option value="user">User</option>
                             <option value="admin">Admin</option>
-                            {currentUser?.role === 'superadmin' && <option value="superadmin">Superadmin</option>}
                           </select>                          {isRoleChangeDisabled(user) && (
-                            <div title="Role modification restricted">
+                            <div title={getRoleChangeTooltip(user)}>
                               <svg 
                                 className="w-4 h-4 text-gray-400 dark:text-gray-500" 
                                 fill="currentColor" 
@@ -354,9 +385,8 @@ export default function UserManagement() {
                         {formatDate(user.createdAt)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                        {user.lastLogin ? formatDate(user.lastLogin) : 'Never'}                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        {currentUser?.role === 'superadmin' ? (
+                        {user.lastLogin ? formatDate(user.lastLogin) : 'Never'}                      </td>                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        {currentUser?.role === 'superadmin' && currentUser?.username !== user.username ? (
                           <button
                             onClick={() => handleDeleteUser(user.id)}
                             className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 transition-colors"
@@ -367,7 +397,14 @@ export default function UserManagement() {
                             </svg>
                           </button>
                         ) : (
-                          <span className="text-gray-400 dark:text-gray-500" title="Only superadmin can delete users">
+                          <span 
+                            className="text-gray-400 dark:text-gray-500" 
+                            title={
+                              currentUser?.username === user.username 
+                                ? "You cannot delete your own account"
+                                : "Only superadmin can delete users"
+                            }
+                          >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
