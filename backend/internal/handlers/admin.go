@@ -81,9 +81,32 @@ func UpdateUserRoleHandler(dbService *services.DBService) gin.HandlerFunc {
 		}
 
 		// Validate role
-		if request.Role != "admin" && request.Role != "user" {
+		if request.Role != "admin" && request.Role != "user" && request.Role != "superadmin" {
 			logger.Log.Errorf("UpdateUserRoleHandler: Invalid role: %s", request.Role)
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role. Must be 'admin' or 'user'"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role. Must be 'admin', 'user', or 'superadmin'"})
+			return
+		}
+
+		// Get current user details from context
+		currentUsername, exists := c.Get("username")
+		if !exists {
+			logger.Log.Error("UpdateUserRoleHandler: Username not found in context")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		currentRole, exists := c.Get("role")
+		if !exists {
+			logger.Log.Error("UpdateUserRoleHandler: Role not found in context")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		// Check if the current user can update this role
+		err = dbService.CanUpdateUserRole(currentRole.(string), currentUsername.(string), userID, request.Role)
+		if err != nil {
+			logger.Log.Warnf("UpdateUserRoleHandler: Role update not allowed: %v", err)
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
 

@@ -62,6 +62,13 @@ INSERT INTO settings (service, config, is_default) VALUES
 
 INSERT INTO users (first_name, last_name, email, username, password_hash, role) 
 VALUES (
+    'Super',
+    'Admin',
+    'superadmin@example.com',
+    'superadmin',
+    '$2a$10$MQoGOfXKw5Ond78KbiwmoO3exudMI8j3IurJoJuRGWRkjVEvo3pmW',  
+    'superadmin'
+),(
     'John',
     'Doe',
     'grodondo@example.com',

@@ -257,3 +257,85 @@ func (s *DBService) DeleteUser(userID int) error {
 	}
 	return nil
 }
+
+// UpdateLastLogin updates a user's last login timestamp
+func (s *DBService) UpdateLastLogin(username string) error {
+	_, err := s.db.Exec(
+		"UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE username = $1",
+		username,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update last login: %v", err)
+	}
+	return nil
+}
+
+// GetUserByID retrieves a user by their ID
+func (s *DBService) GetUserByID(userID int) (*User, error) {
+	var user User
+	err := s.db.QueryRow(`
+		SELECT id, first_name, last_name, email, username, role, created_at,
+		       COALESCE(last_login, '1970-01-01'::timestamp) as last_login
+		FROM users
+		WHERE id = $1
+	`, userID).Scan(
+		&user.ID,
+		&user.FirstName,
+		&user.LastName,
+		&user.Email,
+		&user.Username,
+		&user.Role,
+		&user.CreatedAt,
+		&user.LastLogin,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("user not found")
+		}
+		return nil, fmt.Errorf("failed to get user by ID: %v", err)
+	}
+
+	return &user, nil
+}
+
+// CanUpdateUserRole checks if the current user can update the target user's role
+func (s *DBService) CanUpdateUserRole(currentUserRole, currentUsername string, targetUserID int, newRole string) error {
+	// Get the target user
+	targetUser, err := s.GetUserByID(targetUserID)
+	if err != nil {
+		return fmt.Errorf("failed to get target user: %v", err)
+	}
+
+	// Superadmin can do anything
+	if currentUserRole == "superadmin" {
+		// Ensure only one superadmin exists
+		if newRole == "superadmin" {
+			var count int
+			err := s.db.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'superadmin'").Scan(&count)
+			if err != nil {
+				return fmt.Errorf("failed to check superadmin count: %v", err)
+			}
+			if count >= 1 {
+				return fmt.Errorf("only one superadmin is allowed")
+			}
+		}
+		return nil
+	}
+
+	// Admin users can only promote regular users to admin, but cannot demote admin users
+	if currentUserRole == "admin" {
+		if targetUser.Role == "admin" && newRole != "admin" {
+			return fmt.Errorf("admin users cannot demote other admin users")
+		}
+		if targetUser.Role == "superadmin" {
+			return fmt.Errorf("admin users cannot modify superadmin users")
+		}
+		if newRole == "superadmin" {
+			return fmt.Errorf("admin users cannot promote users to superadmin")
+		}
+		return nil
+	}
+
+	return fmt.Errorf("insufficient permissions to update user roles")
+}

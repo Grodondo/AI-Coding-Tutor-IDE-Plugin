@@ -41,11 +41,16 @@ ENCRYPTION_KEY=12345678901234567890123456789012
 Current used api key: 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
 
 
-TODO LIST
--La extension no deberia de actualizarse automaticamente con el paso del tiempo.
--"Get suggestion" puede ser alterado, actualmente cuando hacer hover, te da el consejo, pero si le das click devuelve un error.
--Por ver: CUando se le de click, podria generarte una sugerencia mas detallada y que se vea de forma mas visual
--Idea: Se podria eliminar el texto "Ger suggestion" all together para minimizar la intrusion de la ia, y cuando le das click, que aparte del mensaje que muestra sobre las posibles mejoras, aparezca a al derecha un boton para que te haga las correcciones automaticamente.
+PGADMIN
+http://localhost:5050
+Email: admin@admin.com
+Password: admin
+
+db
+5432
+mydb
+user
+password
 
 --NUEVOS
 -Elegir un proveedor de cloud 

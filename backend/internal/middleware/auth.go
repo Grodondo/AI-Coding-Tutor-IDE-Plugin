@@ -107,10 +107,9 @@ func AdminMiddleware(dbService interface{}) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-
-		// Check if user has admin role
+		// Check if user has admin or superadmin role
 		role, ok := claims["role"].(string)
-		if !ok || role != "admin" {
+		if !ok || (role != "admin" && role != "superadmin") {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
 			c.Abort()
 			return

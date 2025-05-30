@@ -101,11 +101,16 @@ func LoginHandler(dbService *services.DBService) gin.HandlerFunc {
 
 		passwordHash, role, err := dbService.GetUserCredentials(req.Username)
 		logger.Log.Debugf("Login attempt for user: %s with role: %s", req.Username, role)
-
 		if err != nil || bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)) != nil {
 			logger.Log.Warnf("Invalid login attempt for user: %s", req.Username)
 			c.JSON(401, gin.H{"error": "Invalid credentials"})
 			return
+		}
+
+		// Update last login timestamp
+		if err := dbService.UpdateLastLogin(req.Username); err != nil {
+			logger.Log.Warnf("Failed to update last login for user %s: %v", req.Username, err)
+			// Don't fail the login for this non-critical error
 		}
 
 		// Generate JWT token

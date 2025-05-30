@@ -22,15 +22,13 @@ export default function UserManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState('all');
   const navigate = useNavigate();
-  const { user } = useContext(AuthContext);
-
-  useEffect(() => {
-    logger.info('UserManagement: Checking user role', { user });
-    if (!user || user.role !== 'admin') {
+  const { user: currentUser } = useContext(AuthContext);  useEffect(() => {
+    logger.info('UserManagement: Checking user role', { user: currentUser });
+    if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'superadmin')) {
       logger.warn('UserManagement: Unauthorized access, redirecting');
       navigate('/auth/login');
     }
-  }, [user, navigate]);
+  }, [currentUser, navigate]);
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -72,21 +70,32 @@ export default function UserManagement() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  useEffect(() => {
-    if (user && user.role === 'admin') {
+  };  useEffect(() => {
+    if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin')) {
       logger.info('UserManagement: Initializing fetchUsers');
       fetchUsers();
     }
-  }, [user]);
-
-  const handleRoleChange = async (userId: number, newRole: string) => {
+  }, [currentUser]);
+  const handleRoleChange = async (userId: number, newRole: string, targetUserRole: string) => {
     const token = localStorage.getItem('authToken');
     if (!token) {
       logger.warn('UserManagement: No token for role change, redirecting');
       navigate('/auth/login');
       return;
+    }    // Client-side role validation
+    if (currentUser?.role === 'admin') {
+      if (targetUserRole === 'admin' && newRole !== 'admin') {
+        setError('Admin users cannot demote other admin users.');
+        return;
+      }
+      if (targetUserRole === 'superadmin') {
+        setError('Admin users cannot modify superadmin users.');
+        return;
+      }
+      if (newRole === 'superadmin') {
+        setError('Admin users cannot promote users to superadmin.');
+        return;
+      }
     }
 
     try {
@@ -212,8 +221,7 @@ export default function UserManagement() {
             <div className="md:w-48">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Filter by Role
-              </label>
-              <select
+              </label>              <select
                 value={selectedRole}
                 onChange={(e) => setSelectedRole(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
@@ -221,6 +229,7 @@ export default function UserManagement() {
                 <option value="all">All Roles</option>
                 <option value="admin">Admin</option>
                 <option value="user">User</option>
+                <option value="superadmin">Superadmin</option>
               </select>
             </div>
           </div>
@@ -289,21 +298,21 @@ export default function UserManagement() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <select
+                      <td className="px-6 py-4 whitespace-nowrap">                        <select
                           value={user.role}
-                          onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                          onChange={(e) => handleRoleChange(user.id, e.target.value, user.role)}
                           className={`text-sm px-3 py-1 rounded-full border-0 focus:ring-2 focus:ring-blue-500 ${
-                            user.role === 'admin' 
+                            user.role === 'superadmin'
+                              ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                              : user.role === 'admin' 
                               ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' 
                               : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                          }`}
-                        >
+                          }`}                        >
                           <option value="user">User</option>
                           <option value="admin">Admin</option>
+                          {currentUser?.role === 'superadmin' && <option value="superadmin">Superadmin</option>}
                         </select>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                      </td>                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                         {formatDate(user.createdAt)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
@@ -326,10 +335,8 @@ export default function UserManagement() {
               </table>
             </div>
           </div>
-        )}
-
-        {/* Summary Stats */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+        )}        {/* Summary Stats */}
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
             <div className="flex items-center">
               <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-xl">
@@ -340,6 +347,22 @@ export default function UserManagement() {
               <div className="ml-4">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Total Users</h3>
                 <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{users.length}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+            <div className="flex items-center">
+              <div className="p-3 bg-red-100 dark:bg-red-900 rounded-xl">
+                <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.031 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Superadmin</h3>
+                <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+                  {users.filter(u => u.role === 'superadmin').length}
+                </p>
               </div>
             </div>
           </div>
