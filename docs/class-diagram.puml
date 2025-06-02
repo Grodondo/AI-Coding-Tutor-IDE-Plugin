@@ -1,0 +1,492 @@
+@startuml AI-Coding-Tutor-Class-Diagram
+
+title AI Coding Tutor IDE Plugin - Class Diagram
+
+package "Backend Services" {
+  class DBService {
+    - db: Database
+    - connectionString: String
+    + DBService(dsn: String)
+    + EmailExists(email: String): Boolean
+    + CreateUser(user: User): Boolean
+    + GetUserCredentials(username: String): String, String
+    + GetUserProfile(username: String): User
+    + GetAllUsers(): List<User>
+    + UpdateUserRole(userID: Integer, role: String): Boolean
+    + DeleteUser(userID: Integer): Boolean
+    + CreateQuery(query: Query): Boolean
+    + UpdateFeedback(id: String, feedback: String): Boolean
+    + GetSettingsFromService(service: String): String
+    + UpdateOrInsertSettings(service: String, config: String): Boolean
+    + DeleteSettings(service: String): Boolean
+  }
+
+  class AIService {
+    - settingsService: SettingsService
+    - httpClient: HttpClient
+    - providers: Map<String, String>
+    + AIService(settingsService: SettingsService)
+    + GetResponse(service: String, provider: String, model: String, prompt: String): String
+    + GetResponseGeneral(apiKey: String, model: String, prompt: String, url: String, temperature: Double): String
+    + ProcessQuery(query: String, level: String): String
+    + AnalyzeCode(code: String, level: String): String
+  }
+
+  class SettingsService {
+    - dbService: DBService
+    - settings: Map<String, AiSettings>
+    - encryptionKey: String
+    + SettingsService(dbService: DBService)
+    + LoadAiSettings(): Boolean
+    + GetAiSettings(service: String): AiSettings
+    + UpdateSettings(service: String, settings: AiSettings): Boolean
+    + DeleteSettings(service: String): Boolean
+  }
+}
+
+package "Data Models" {
+  class User {
+    - id: Integer
+    - firstName: String
+    - lastName: String
+    - email: String
+    - username: String
+    - passwordHash: String
+    - role: String
+    - createdAt: Date
+    - lastLogin: Date
+    + User(firstName: String, lastName: String, email: String, username: String, passwordHash: String, role: String)
+    + getId(): Integer
+    + getFirstName(): String
+    + getLastName(): String
+    + getEmail(): String
+    + getUsername(): String
+    + getPasswordHash(): String
+    + getRole(): String
+    + getCreatedAt(): Date
+    + getLastLogin(): Date
+    + setFirstName(firstName: String): void
+    + setLastName(lastName: String): void
+    + setEmail(email: String): void
+    + setRole(role: String): void
+    + setLastLogin(lastLogin: Date): void
+  }
+
+  class Query {
+    - id: String
+    - query: String
+    - provider: String
+    - level: String
+    - response: String
+    - feedback: String
+    - timestamp: Date
+    + Query(id: String, query: String, provider: String, level: String, response: String)
+    + getId(): String
+    + getQuery(): String
+    + getProvider(): String
+    + getLevel(): String
+    + getResponse(): String
+    + getFeedback(): String
+    + getTimestamp(): Date
+    + setFeedback(feedback: String): void
+    + setResponse(response: String): void
+  }
+
+  class AiSettings {
+    - aiProvider: String
+    - aiModel: String
+    - encryptedAPIKey: String
+    - apiKey: String
+    - temperature: Double
+    - prompts: Map<String, String>
+    + AiSettings(aiProvider: String, aiModel: String, apiKey: String)
+    + getAiProvider(): String
+    + getAiModel(): String
+    + getEncryptedAPIKey(): String
+    + getApiKey(): String
+    + getTemperature(): Double
+    + getPrompts(): Map<String, String>
+    + setAiProvider(aiProvider: String): void
+    + setAiModel(aiModel: String): void
+    + setApiKey(apiKey: String): void
+    + setTemperature(temperature: Double): void
+    + setPrompts(prompts: Map<String, String>): void
+  }
+
+  enum ServiceType {
+    QUERY_SERVICE
+    ANALYZE_SERVICE
+    + isValid(): Boolean
+    + toString(): String
+  }
+}
+
+package "HTTP Handlers" {
+  class AuthHandler {
+    - dbService: DBService
+    - jwtSecret: String
+    + AuthHandler(dbService: DBService, jwtSecret: String)
+    + LoginHandler(credentials: LoginRequest): AuthResponse
+    + RegisterHandler(userData: RegisterRequest): User
+    + ProfileHandler(token: String): User
+    + VerifyTokenHandler(token: String): Boolean
+    + generateToken(user: User): String
+    + validateCredentials(username: String, password: String): Boolean
+  }
+
+  class QueryHandler {
+    - aiService: AIService
+    - dbService: DBService
+    - settingsService: SettingsService
+    + QueryHandler(aiService: AIService, dbService: DBService, settingsService: SettingsService)
+    + ProcessQuery(request: QueryRequest): QueryResponse
+    + ProcessAnalysis(request: AnalysisRequest): AnalysisResponse
+    + ProcessFeedback(queryId: String, feedback: String): Boolean
+    + validateRequest(request: QueryRequest): Boolean
+  }
+
+  class SettingsHandler {
+    - dbService: DBService
+    - settingsService: SettingsService
+    + SettingsHandler(dbService: DBService, settingsService: SettingsService)
+    + GetSettings(): Map<String, AiSettings>
+    + UpdateSettings(service: String, config: AiSettings): Boolean
+    + DeleteSettings(service: String): Boolean
+    + validateSettings(settings: AiSettings): Boolean
+  }
+
+  class AdminHandler {
+    - dbService: DBService
+    + AdminHandler(dbService: DBService)
+    + GetAllUsers(): List<User>
+    + UpdateUserRole(userID: Integer, role: String): Boolean
+    + DeleteUser(userID: Integer): Boolean
+    + GetUserStatistics(): UserStatistics
+    + validateAdminPermissions(user: User): Boolean
+  }
+}
+
+package "Frontend Models" {
+  class ChatMessage {
+    - role: String
+    - content: String
+    - timestamp: Date
+    + ChatMessage(role: String, content: String, timestamp: Date)
+    + getRole(): String
+    + getContent(): String
+    + getTimestamp(): Date
+    + setContent(content: String): void
+  }
+
+  class Chat {
+    - id: String
+    - title: String
+    - messages: List<ChatMessage>
+    - lastUpdated: Date
+    + Chat(id: String, title: String)
+    + getId(): String
+    + getTitle(): String
+    + getMessages(): List<ChatMessage>
+    + getLastUpdated(): Date
+    + setTitle(title: String): void
+    + addMessage(message: ChatMessage): void
+    + removeMessage(messageId: String): void
+    + updateLastActivity(): void
+  }
+
+  class AIModel {
+    - provider: String
+    - name: String
+    - description: String
+    - isAvailable: Boolean
+    + AIModel(provider: String, name: String, description: String)
+    + getProvider(): String
+    + getName(): String
+    + getDescription(): String
+    + isAvailable(): Boolean
+    + setProvider(provider: String): void
+    + setName(name: String): void
+    + setDescription(description: String): void
+    + setAvailable(available: Boolean): void
+  }
+
+  class UserProfile {
+    - id: Integer
+    - firstName: String
+    - lastName: String
+    - email: String
+    - username: String
+    - role: String
+    - createdAt: String
+    - lastLogin: String
+    + UserProfile(id: Integer, firstName: String, lastName: String, email: String, username: String, role: String)
+    + getId(): Integer
+    + getFirstName(): String
+    + getLastName(): String
+    + getEmail(): String
+    + getUsername(): String
+    + getRole(): String
+    + getCreatedAt(): String
+    + getLastLogin(): String
+    + getFullName(): String
+  }
+}
+
+package "VS Code Extension" {
+  class BackendService {
+    - backendUrl: String
+    - apiTimeout: Integer
+    - httpClient: HttpClient
+    + BackendService(backendUrl: String)
+    + checkBackendConnection(): Boolean
+    + fetchSuggestionFromBackend(code: String, proficiency: String): SuggestionResponse
+    + fetchQueryResponse(query: String, level: String): QueryResponse
+    + sendFeedback(queryId: String, feedback: String): Boolean
+    + fetchWithRetry(url: String, options: Object, retries: Integer): Object
+    + getBackendUrl(): String
+    + setBackendUrl(url: String): void
+  }
+
+  class ChatViewProvider {
+    - webview: WebviewView
+    - messages: List<ChatMessage>
+    - extensionUri: String
+    + ChatViewProvider(extensionUri: String)
+    + resolveWebviewView(webviewView: WebviewView): void
+    + sendQuestion(question: String): void
+    + displayResponse(response: String): void
+    + updateMessages(messages: List<ChatMessage>): void
+    + getHtmlForWebview(): String
+  }
+
+  class SuggestionProvider {
+    - backendService: BackendService
+    - isActive: Boolean
+    + SuggestionProvider(backendService: BackendService)
+    + provideSuggestions(document: TextDocument, position: Position): List<Suggestion>
+    + getSuggestionFromAI(code: String, position: Position): Suggestion
+    + setActive(active: Boolean): void
+    + isProviderActive(): Boolean
+  }
+
+  interface SuggestionResponse {
+    + suggestion: String
+    + explanation: String
+    + documentationLink: String
+    + diff: String
+  }
+
+  interface QueryResponse {
+    + id: String
+    + response: String
+  }
+
+  interface AnalysisResponse {
+    + suggestions: List<AnalysisSuggestion>
+  }
+}
+
+package "Middleware" {
+  class AuthMiddleware {
+    - jwtSecret: String
+    - tokenExpiration: Integer
+    + AuthMiddleware(jwtSecret: String)
+    + validateToken(token: String): Boolean
+    + extractUserFromToken(token: String): User
+    + requireAuthentication(): Boolean
+    + requireAdminRole(): Boolean
+    + generateTokenResponse(user: User): TokenResponse
+  }
+
+  class CORSMiddleware {
+    - allowedOrigins: List<String>
+    - allowedMethods: List<String>
+    - allowedHeaders: List<String>
+    + CORSMiddleware(allowedOrigins: List<String>)
+    + handleCORSRequest(): Boolean
+    + isOriginAllowed(origin: String): Boolean
+    + setAllowedOrigins(origins: List<String>): void
+  }
+}
+
+' Relationships between classes
+DBService ||--o{ User : manages
+DBService ||--o{ Query : stores
+DBService ||--o{ AiSettings : persists
+
+SettingsService ||--|| DBService : uses
+SettingsService ||--o{ AiSettings : manages
+
+AIService ||--|| SettingsService : uses
+AIService ..> Query : processes
+
+AuthHandler ||--|| DBService : uses
+QueryHandler ||--|| AIService : uses
+QueryHandler ||--|| DBService : uses
+QueryHandler ||--|| SettingsService : uses
+SettingsHandler ||--|| DBService : uses
+SettingsHandler ||--|| SettingsService : uses
+AdminHandler ||--|| DBService : uses
+
+Chat ||--o{ ChatMessage : contains
+User ||--o{ Query : creates
+
+BackendService ..> QueryResponse : returns
+BackendService ..> SuggestionResponse : returns
+BackendService ..> AnalysisResponse : returns
+
+ChatViewProvider ||--|| BackendService : uses
+SuggestionProvider ||--|| BackendService : uses
+
+AuthMiddleware --> AuthHandler : protects
+AuthMiddleware --> AdminHandler : protects
+AuthMiddleware --> SettingsHandler : protects
+
+Query --> ServiceType : categorizes
+
+@enduml
+    + GetResponseGeneral(apiKey: string, model: string, prompt: string, url: string, temperature: float64): string, error
+  }
+
+  class SettingsService {
+    - dbService: DBService
+    - settings: map[string]AiSettings
+    + NewSettingsService(dbService: DBService): SettingsService
+    + LoadAiSettings(): error
+    + GetAiSettings(service: string): AiSettings, error
+  }
+}
+
+package "Data Models" {
+  class User {
+    + ID: int
+    + FirstName: string
+    + LastName: string
+    + Email: string
+    + Username: string
+    + PasswordHash: string
+    + Role: string
+    + CreatedAt: time.Time
+    + LastLogin: time.Time
+  }
+
+  class Query {
+    + ID: string
+    + Query: string
+    + Provider: string
+    + Level: string
+    + Response: string
+    + Feedback: *string
+  }
+
+  class AiSettings {
+    + AIProvider: string
+    + AIModel: string
+    + EncryptedAPIKey: string
+    + APIKey: string
+    + Temperature: *float64
+    + Prompts: map[string]string
+  }
+}
+
+package "HTTP Handlers" {
+  class AuthHandler {
+    + LoginHandler(dbService: DBService): gin.HandlerFunc
+    + RegisterHandler(dbService: DBService): gin.HandlerFunc
+    + ProfileHandler(dbService: DBService): gin.HandlerFunc
+    + VerifyTokenHandler(): gin.HandlerFunc
+  }
+
+  class QueryHandler {
+    + QueryHandler(aiService: AIService, dbService: DBService, settingsService: SettingsService): gin.HandlerFunc
+  }
+
+  class AnalyzeHandler {
+    + AnalyzeHandler(aiService: AIService, dbService: DBService, settingsService: SettingsService): gin.HandlerFunc
+  }
+
+  class AdminHandler {
+    + GetAllUsersHandler(dbService: DBService): gin.HandlerFunc
+    + UpdateUserRoleHandler(dbService: DBService): gin.HandlerFunc
+    + DeleteUserHandler(dbService: DBService): gin.HandlerFunc
+  }
+
+  class SettingsHandler {
+    + GetSettingsHandler(dbService: DBService, settingsService: SettingsService): gin.HandlerFunc
+    + UpdateSettingsHandler(dbService: DBService, settingsService: SettingsService): gin.HandlerFunc
+    + DeleteSettingsHandler(dbService: DBService, settingsService: SettingsService): gin.HandlerFunc
+  }
+}
+
+package "Frontend Models" {
+  class Message {
+    + role: 'user' | 'assistant'
+    + content: string
+    + timestamp: Date
+  }
+
+  class Chat {
+    + id: string
+    + title: string
+    + messages: Message[]
+    + lastUpdated: Date
+  }
+
+  class AIModel {
+    + provider: string
+    + name: string
+    + description: string
+  }
+
+  class AdminAIModel {
+    + service: string
+    + config: AIModelConfig
+  }
+
+  class AIModelConfig {
+    + ai_provider: string
+    + ai_model: string
+    + encrypted_api_key: string
+    + api_key: string
+    + temperature: number
+    + prompts: Record<string,string>
+  }
+}
+
+package "Middleware" {
+  class AuthMiddleware {
+    + AuthMiddleware(): gin.HandlerFunc
+  }
+
+  class AdminMiddleware {
+    + AdminMiddleware(dbService: interface{}): gin.HandlerFunc
+  }
+}
+
+' Relationships
+DBService ||--o{ User : manages
+DBService ||--o{ Query : stores
+DBService ||--o{ AiSettings : configures
+
+SettingsService --> DBService : uses
+AIService --> SettingsService : uses
+
+AuthHandler --> DBService : uses
+QueryHandler --> AIService : uses
+QueryHandler --> DBService : uses
+QueryHandler --> SettingsService : uses
+AnalyzeHandler --> AIService : uses
+AnalyzeHandler --> DBService : uses
+AnalyzeHandler --> SettingsService : uses
+AdminHandler --> DBService : uses
+SettingsHandler --> DBService : uses
+SettingsHandler --> SettingsService : uses
+
+Chat ||--o{ Message : contains
+AdminAIModel ||--|| AIModelConfig : has
+
+AuthMiddleware --> AuthHandler : protects
+AdminMiddleware --> AdminHandler : protects
+AdminMiddleware --> SettingsHandler : protects
+
+@enduml

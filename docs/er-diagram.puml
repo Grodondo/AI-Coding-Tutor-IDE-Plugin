@@ -1,0 +1,57 @@
+@startuml AI-Coding-Tutor-ER-Diagram
+
+!theme blueprint
+title AI Coding Tutor IDE Plugin - Entity Relationship Diagram
+
+' Define entities
+entity "users" {
+  * id : SERIAL <<PK>>
+  --
+  * first_name : VARCHAR(255)
+  * last_name : VARCHAR(255)
+  * email : VARCHAR(255) <<UK>>
+  * username : VARCHAR(255) <<UK>>
+  * password_hash : VARCHAR(255)
+  * role : VARCHAR(50) <<CK>>
+  * created_at : TIMESTAMP
+  * updated_at : TIMESTAMP
+  last_login : TIMESTAMP
+}
+
+entity "queries" {
+  * id : UUID <<PK>>
+  --
+  * user_id : INTEGER <<FK>>
+  * query : TEXT
+  * provider_name : VARCHAR(50)
+  * level : VARCHAR(10) <<CK>>
+  * response : TEXT
+  feedback : VARCHAR(10) <<CK>>
+  * created_at : TIMESTAMP
+}
+
+entity "settings" {
+  * id : SERIAL <<PK>>
+  --
+  * service : VARCHAR(50) <<UK>>
+  * config : JSONB
+  is_default : BOOLEAN
+  * created_at : TIMESTAMP
+  * updated_at : TIMESTAMP
+}
+
+' Define relationships
+users ||--o{ queries : "makes"
+settings ||--o{ queries : "configures"
+
+' Additional notes
+note right of users : Role values:\n- user\n- admin\n- superadmin
+note right of queries : Level values:\n- novice\n- medium\n- expert\n\nFeedback values:\n- positive\n- negative
+note left of settings : Service types:\n- query\n- analyze\n\nConfig contains:\n- ai_provider\n- ai_model\n- encrypted_api_key\n- temperature\n- prompts
+
+' Data flow arrows
+note top of users : Users authenticate and\ninteract with AI services
+note top of queries : Stores all AI interactions\nwith user feedback
+note top of settings : Configures AI providers\nand models for services
+
+@enduml

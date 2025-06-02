@@ -1,0 +1,89 @@
+@startuml
+
+left to right direction
+
+actor "Guest User" as guest
+actor "Regular User" as user
+actor "Admin" as admin
+actor "Superadmin" as superadmin
+
+note bottom: AI Coding Tutor IDE Plugin - Use Case Diagram
+
+package "Authentication" {
+  usecase "Register Account" as register
+  usecase "Login" as login
+  usecase "Logout" as logout
+}
+
+package "AI Chat & Learning" {
+  usecase "Ask AI Question" as askAI
+  usecase "Select Difficulty Level" as selectLevel
+  usecase "View Query History" as viewHistory
+  usecase "Provide Feedback" as feedback
+  usecase "Analyze Code" as analyzeCode
+}
+
+package "VS Code Extension" {
+  usecase "Chat via Extension" as chatExt
+  usecase "Get Code Suggestions" as codeSuggestions
+  usecase "Analyze Code in IDE" as analyzeIDE
+}
+
+package "Profile Management" {
+  usecase "View Profile" as viewProfile
+  usecase "Update Profile" as updateProfile
+}
+
+package "Administration" {
+  usecase "Manage Users" as manageUsers
+  usecase "Update User Roles" as updateRoles
+  usecase "Configure AI Settings" as configAI
+  usecase "View System Analytics" as analytics
+}
+
+package "Superadmin Functions" {
+  usecase "Delete Users" as deleteUsers
+  usecase "Promote to Admin" as promoteAdmin
+  usecase "System Configuration" as sysConfig
+}
+
+package "Public Access" {
+  usecase "Browse Public Content" as browsePublic
+  usecase "View About Page" as viewAbout
+}
+
+' Actor inheritance relationships
+admin --|> user
+superadmin --|> admin
+
+' Guest User connections (only what guests can do)
+guest --> register
+guest --> login
+guest --> browsePublic
+guest --> viewAbout
+
+' Regular User connections (what authenticated users can do)
+user --> logout
+user --> viewProfile
+user --> updateProfile
+user --> askAI
+user --> selectLevel
+user --> viewHistory
+user --> feedback
+user --> analyzeCode
+user --> chatExt
+user --> codeSuggestions
+user --> analyzeIDE
+
+' Admin connections (only admin-specific functions)
+admin --> manageUsers
+admin --> updateRoles
+admin --> configAI
+admin --> analytics
+
+' Superadmin connections (only superadmin-specific functions)
+superadmin --> deleteUsers
+superadmin --> promoteAdmin
+superadmin --> sysConfig
+
+@enduml

@@ -1,0 +1,130 @@
+@startuml AI-Coding-Tutor-Simple-Class-Diagram
+
+title AI Coding Tutor IDE Plugin - Simplified Class Diagram
+
+left to right direction
+
+package "Backend Core" {
+  class DBService {
+    - db: Database
+    + createUser(user: User): boolean
+    + authenticate(username: string, password: string): User
+    + saveQuery(query: Query): boolean
+    + getUserQueries(userId: string): Query[]
+  }
+
+  class AIService {
+    - providers: Map<string, Provider>
+    + processQuery(query: string, level: string): string
+    + analyzeCode(code: string, level: string): string
+  }
+
+  class SettingsService {
+    - configurations: Map<string, Config>
+    + getAISettings(service: string): Config
+    + updateSettings(service: string, config: Config): boolean
+  }
+}
+
+package "Data Models" {
+  class User {
+    + id: string
+    + username: string
+    + email: string
+    + role: string
+    + createdAt: Date
+  }
+
+  class Query {
+    + id: string
+    + query: string
+    + response: string
+    + level: string
+    + provider: string
+    + feedback: string
+    + timestamp: Date
+  }
+
+  class AIConfig {
+    + provider: string
+    + model: string
+    + apiKey: string
+    + prompts: Map<string, string>
+  }
+}
+
+package "API Handlers" {
+  class AuthHandler {
+    + login(credentials: LoginRequest): AuthResponse
+    + register(user: RegisterRequest): User
+    + verifyToken(token: string): boolean
+  }
+
+  class QueryHandler {
+    + processQuery(request: QueryRequest): QueryResponse
+    + getFeedback(queryId: string, feedback: string): boolean
+  }
+
+  class SettingsHandler {
+    + getSettings(): Map<string, AIConfig>
+    + updateSettings(config: AIConfig): boolean
+  }
+}
+
+package "Frontend Components" {
+  class ChatInterface {
+    + sendMessage(message: string): void
+    + displayResponse(response: string): void
+    + setDifficultyLevel(level: string): void
+  }
+
+  class SettingsPanel {
+    + displayConfigurations(): void
+    + updateAIProvider(provider: string): void
+    + testConnection(): boolean
+  }
+
+  class VSCodeExtension {
+    + captureCodeContext(): string
+    + showSuggestions(suggestions: string[]): void
+    + integrateWithEditor(): void
+  }
+}
+
+' Relationships
+DBService --|> User : manages
+DBService --|> Query : stores
+SettingsService --|> AIConfig : manages
+
+AIService --> SettingsService : uses
+QueryHandler --> AIService : uses
+QueryHandler --> DBService : uses
+AuthHandler --> DBService : uses
+SettingsHandler --> SettingsService : uses
+
+ChatInterface --> QueryHandler : calls
+SettingsPanel --> SettingsHandler : calls
+VSCodeExtension --> QueryHandler : calls
+
+Query --> User : belongs to
+
+note right of AIService
+  Integrates with multiple
+  AI providers (Groq, OpenAI)
+  Based on configuration
+end note
+
+note right of User
+  Role-based access:
+  - user
+  - admin
+  - superadmin
+end note
+
+note bottom of VSCodeExtension
+  Captures code context
+  and integrates AI responses
+  directly into VS Code
+end note
+
+@enduml

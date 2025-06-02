@@ -1,0 +1,105 @@
+@startuml AI-Coding-Tutor-Data-Flow
+
+!theme blueprint
+title AI Coding Tutor IDE Plugin - Data Flow Diagram
+
+' External entities
+actor "User" as user
+actor "Admin" as admin
+actor "AI Service Provider" as ai
+rectangle "VS Code Extension" as vscode
+
+' Main system processes
+rectangle "Authentication\nService" as auth
+rectangle "AI Query\nProcessor" as query_proc
+rectangle "Code Analysis\nService" as analyze_proc
+rectangle "User Management\nService" as user_mgmt
+rectangle "Settings\nManager" as settings_mgmt
+rectangle "Feedback\nProcessor" as feedback_proc
+
+' Data stores
+database "Users\nTable" as users_db
+database "Queries\nTable" as queries_db
+database "Settings\nTable" as settings_db
+
+' Web interface
+rectangle "Web Application\n(React Frontend)" as webapp
+rectangle "Backend API\n(Go Server)" as backend
+
+' Data flows for authentication
+user --> webapp : login/register
+webapp --> backend : auth request
+backend --> auth : validate credentials
+auth --> users_db : user data
+users_db --> auth : user info
+auth --> backend : auth result
+backend --> webapp : auth token
+webapp --> user : authenticated session
+
+' Data flows for AI queries
+user --> webapp : AI question
+vscode --> backend : code + question
+webapp --> backend : question + level
+backend --> query_proc : process query
+query_proc --> settings_db : get AI config
+settings_db --> query_proc : AI settings
+query_proc --> ai : formatted query
+ai --> query_proc : AI response
+query_proc --> queries_db : store interaction
+query_proc --> backend : formatted response
+backend --> webapp : AI answer
+backend --> vscode : AI suggestions
+webapp --> user : display answer
+vscode --> user : show suggestions
+
+' Data flows for code analysis
+user --> vscode : analyze code
+vscode --> backend : code snippet
+backend --> analyze_proc : analyze request
+analyze_proc --> settings_db : get analysis config
+settings_db --> analyze_proc : analysis settings
+analyze_proc --> ai : code + analysis prompt
+ai --> analyze_proc : analysis result
+analyze_proc --> queries_db : store analysis
+analyze_proc --> backend : analysis response
+backend --> vscode : analysis result
+vscode --> user : show analysis
+
+' Data flows for feedback
+user --> webapp : provide feedback
+webapp --> backend : feedback data
+backend --> feedback_proc : process feedback
+feedback_proc --> queries_db : update query feedback
+queries_db --> feedback_proc : confirmation
+feedback_proc --> backend : feedback stored
+backend --> webapp : feedback confirmation
+
+' Data flows for user management
+admin --> webapp : manage users
+webapp --> backend : user mgmt request
+backend --> user_mgmt : process request
+user_mgmt --> users_db : CRUD operations
+users_db --> user_mgmt : user data
+user_mgmt --> backend : operation result
+backend --> webapp : updated user list
+webapp --> admin : user management interface
+
+' Data flows for settings management
+admin --> webapp : configure AI settings
+webapp --> backend : settings update
+backend --> settings_mgmt : update config
+settings_mgmt --> settings_db : store settings
+settings_db --> settings_mgmt : confirmation
+settings_mgmt --> backend : settings updated
+backend --> webapp : configuration saved
+webapp --> admin : settings confirmation
+
+' Query history
+user --> webapp : view history
+webapp --> backend : history request
+backend --> queries_db : get user queries
+queries_db --> backend : query history
+backend --> webapp : formatted history
+webapp --> user : display history
+
+@enduml

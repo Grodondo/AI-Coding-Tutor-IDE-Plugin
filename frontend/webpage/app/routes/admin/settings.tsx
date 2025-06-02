@@ -515,11 +515,10 @@ const ModelDisplay: React.FC<ModelDisplayProps> = ({ model, onEdit, onDelete }) 
               <span className="text-gray-600 dark:text-gray-400">
                 {model.config.temperature !== undefined ? model.config.temperature : '0.7 (default)'}
               </span>
-            </div>
-            <div className="flex items-center">
+            </div>            <div className="flex items-center">
               <span className="font-medium text-gray-700 dark:text-gray-300 w-24">API Key:</span>
               <span className="text-gray-600 dark:text-gray-400 font-mono text-xs">
-                {model.config.api_key ? '••••' + model.config.api_key.slice(-4) : 'Not configured'}
+                {model.config.encrypted_api_key ? '••••••••••••••••' : 'Not configured'}
               </span>
             </div>
           </div>
