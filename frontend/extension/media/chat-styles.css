@@ -121,8 +121,9 @@ body {
 
 .message-content {
     line-height: 1.5;
-    white-space: pre-wrap;
+    white-space: normal;
     overflow-wrap: break-word;
+    color: var(--vscode-editor-foreground);
 }
 
 .message-time {
@@ -220,17 +221,20 @@ body {
 
 pre {
     background-color: var(--vscode-textCodeBlock-background);
-    padding: 12px;
+    border: 1px solid var(--vscode-panel-border);
     border-radius: var(--border-radius);
+    padding: 12px;
+    margin: 8px 0;
     overflow-x: auto;
     white-space: pre-wrap;
-    margin: 8px 0;
+    color: var(--vscode-textPreformat-foreground);
 }
 
 code {
     font-family: var(--vscode-editor-font-family);
     font-size: 90%;
     background-color: var(--vscode-textCodeBlock-background);
+    color: var(--vscode-textPreformat-foreground);
     padding: 2px 4px;
     border-radius: 3px;
 }
@@ -352,21 +356,24 @@ pre code {
     margin: 12px 0;
     padding: 8px 16px;
     background-color: var(--vscode-editor-inactiveSelectionBackground);
+    color: var(--vscode-editor-foreground);
     font-style: italic;
 }
 
 .message-content code {
-    background-color: var(--vscode-textCodeBlock-background);
-    color: var(--vscode-textPreformat-foreground);
+    background-color: var(--vscode-textCodeBlock-background, var(--vscode-editor-inactiveSelectionBackground));
+    color: var(--vscode-textPreformat-foreground, var(--vscode-editor-foreground));
     padding: 2px 4px;
     border-radius: 3px;
     font-family: var(--vscode-editor-font-family);
     font-size: 0.9em;
+    border: 1px solid var(--vscode-panel-border, rgba(255, 255, 255, 0.1));
 }
 
 .message-content pre {
-    background-color: var(--vscode-textCodeBlock-background);
-    border: 1px solid var(--vscode-panel-border);
+    background-color: var(--vscode-textCodeBlock-background, var(--vscode-editor-inactiveSelectionBackground));
+    color: var(--vscode-textPreformat-foreground, var(--vscode-editor-foreground));
+    border: 1px solid var(--vscode-panel-border, rgba(255, 255, 255, 0.1));
     border-radius: 4px;
     padding: 12px;
     margin: 12px 0;
@@ -376,7 +383,9 @@ pre code {
 
 .message-content pre code {
     background: none;
+    color: inherit;
     padding: 0;
+    border: none;
     border-radius: 0;
     font-size: inherit;
 }
@@ -396,6 +405,7 @@ pre code {
 
 .message-content th {
     background-color: var(--vscode-editor-inactiveSelectionBackground);
+    color: var(--vscode-editor-foreground);
     font-weight: bold;
 }
 

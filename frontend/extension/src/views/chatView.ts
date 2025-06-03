@@ -117,12 +117,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             }
         }, 1500);
     }
-    
-    /**
+      /**
      * Force initialization of the webview if normal ready event fails
      */
     private _forceInitialize() {
-        if (!this._view) return;
+        if (!this._view) {
+            return;
+        }
         
         console.log('Forcing chat webview initialization');
         this._isWebviewReady = true;
