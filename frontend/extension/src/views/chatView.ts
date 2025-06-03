@@ -7,6 +7,7 @@ import { ChatMessage } from '../types';
 import { fetchQueryResponse, sendFeedbackToBackend } from '../api/backendService';
 import { parseResponseForCodeChanges, showCodeChangeSuggestions } from '../utils/codeUtils';
 import * as path from 'path';
+import { marked } from 'marked';
 
 /**
  * Chat view provider for the Ask Questions panel
@@ -645,10 +646,40 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 const header = document.createElement('div');
                 header.className = 'message-header';
                 header.textContent = message.role === 'user' ? 'You' : 'AI Tutor';
-                
-                const content = document.createElement('div');
-                content.className = 'message-content';
-                content.textContent = message.content;
+                  const content = document.createElement('div');
+                content.className = 'message-content';                // Render markdown for assistant messages, plain text for user messages
+                if (message.role === 'assistant') {
+                    try {
+                        // Configure marked for better security and VS Code theme compatibility
+                        marked.setOptions({
+                            breaks: true,
+                            gfm: true,
+                            headerIds: false,
+                            mangle: false,
+                        });
+                        
+                        const htmlContent = marked.parse(message.content);
+                        
+                        // Basic HTML sanitization (remove script tags and dangerous attributes)
+                        const sanitizedHtml = htmlContent
+                            .replace(/<script\\b[^<]*(?:(?!<\\/script>)<[^<]*)*<\\/script>/gi, '')
+                            .replace(/javascript:/gi, '')
+                            .replace(/on\\w+\\s*=/gi, '')
+                            .replace(/<iframe\\b[^>]*>/gi, '')
+                            .replace(/<object\\b[^>]*>/gi, '')
+                            .replace(/<embed\\b[^>]*>/gi, '')
+                            .replace(/<form\\b[^>]*>/gi, '')
+                            .replace(/<input\\b[^>]*>/gi, '')
+                            .replace(/<button\\b[^>]*>/gi, '');
+                        
+                        content.innerHTML = sanitizedHtml;
+                    } catch (error) {
+                        console.error('Error rendering markdown:', error);
+                        content.textContent = message.content;
+                    }
+                } else {
+                    content.textContent = message.content;
+                }
                 
                 const time = document.createElement('div');
                 time.className = 'message-time';
@@ -856,4 +887,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 </body>
 </html>`;
     }
-} 
+    
+    /**
+     * Basic HTML sanitization to prevent XSS attacks
+     */
+    private _sanitizeHtml(html: string): string {
+        // Remove script tags and dangerous attributes
+        let sanitized = html
+            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+            .replace(/javascript:/gi, '')
+            .replace(/on\w+\s*=/gi, '')
+            .replace(/<iframe\b[^>]*>/gi, '')
+            .replace(/<object\b[^>]*>/gi, '')
+            .replace(/<embed\b[^>]*>/gi, '')
+            .replace(/<form\b[^>]*>/gi, '')
+            .replace(/<input\b[^>]*>/gi, '')
+            .replace(/<button\b[^>]*>/gi, '');
+        
+        return sanitized;
+    }
+}

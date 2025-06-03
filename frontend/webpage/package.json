@@ -11,9 +11,13 @@
   "dependencies": {
     "@react-router/node": "^7.5.0",
     "@react-router/serve": "^7.5.0",
+    "@types/dompurify": "^3.0.5",
+    "@types/marked": "^5.0.2",
     "@types/react-google-recaptcha": "^2.1.9",
+    "dompurify": "^3.2.6",
     "isbot": "^5.1.17",
     "jwt-decode": "^4.0.0",
+    "marked": "^15.0.12",
     "next": "^15.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

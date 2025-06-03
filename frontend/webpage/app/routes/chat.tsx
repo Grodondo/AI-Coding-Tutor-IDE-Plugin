@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useContext } from 'react';
 import { useNavigate } from 'react-router';
 import { FiSend, FiRefreshCw, FiPlus, FiMessageSquare } from 'react-icons/fi';
 import { AuthContext } from '~/context/AuthContext';
+import MarkdownRenderer from '~/components/MarkdownRenderer';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -425,14 +426,20 @@ export default function Chat() {
                 key={index}
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <div
-                  className={`max-w-[80%] rounded-2xl p-6 ${
+                <div                  className={`max-w-[80%] rounded-2xl p-6 ${
                     message.role === 'user'
                       ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
                       : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 shadow-lg'
                   }`}
                 >
-                  <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                  {message.role === 'assistant' ? (
+                    <MarkdownRenderer 
+                      content={message.content} 
+                      className="leading-relaxed" 
+                    />
+                  ) : (
+                    <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                  )}
                   <div className={`text-xs mt-3 ${
                     message.role === 'user' ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'
                   }`}>
