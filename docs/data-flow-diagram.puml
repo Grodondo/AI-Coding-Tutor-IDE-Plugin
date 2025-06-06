@@ -1,4 +1,4 @@
-@startuml AI-Coding-Tutor-Data-Flow
+@startuml
 
 !theme blueprint
 title AI Coding Tutor IDE Plugin - Data Flow Diagram
