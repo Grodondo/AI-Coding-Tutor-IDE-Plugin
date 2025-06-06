@@ -25,14 +25,20 @@ export default function AdminSettings() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { user } = useContext(AuthContext);
+  const { user, isLoading: authLoading } = useContext(AuthContext);
+
   useEffect(() => {
+    // Don't redirect if we're still loading the auth state
+    if (authLoading) {
+      return;
+    }
+    
     logger.info('AdminSettings: Checking user role', { user });
     if (!user || (user.role !== 'admin' && user.role !== 'superadmin')) {
       logger.warn('AdminSettings: Unauthorized access, redirecting');
       navigate('/auth/login');
     }
-  }, [user, navigate]);
+  }, [user, authLoading, navigate]);
 
   const fetchModels = async () => {
     setIsLoading(true);
@@ -85,13 +91,12 @@ export default function AdminSettings() {
     } finally {
       setIsLoading(false);
     }
-  };
-  useEffect(() => {
-    if (user && (user.role === 'admin' || user.role === 'superadmin')) {
+  };  useEffect(() => {
+    if (!authLoading && user && (user.role === 'admin' || user.role === 'superadmin')) {
       logger.info('AdminSettings: Initializing fetchModels');
       fetchModels();
     }
-  }, [user]);
+  }, [user, authLoading]);
 
   async function handleSave(model: AIModel) {
     const token = localStorage.getItem('authToken');

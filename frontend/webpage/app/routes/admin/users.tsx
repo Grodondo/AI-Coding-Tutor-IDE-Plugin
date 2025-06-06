@@ -22,13 +22,20 @@ export default function UserManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState('all');
   const navigate = useNavigate();
-  const { user: currentUser } = useContext(AuthContext);  useEffect(() => {
+  const { user: currentUser, isLoading: authLoading } = useContext(AuthContext);
+
+  useEffect(() => {
+    // Don't redirect if we're still loading the auth state
+    if (authLoading) {
+      return;
+    }
+    
     logger.info('UserManagement: Checking user role', { user: currentUser });
     if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'superadmin')) {
       logger.warn('UserManagement: Unauthorized access, redirecting');
       navigate('/auth/login');
     }
-  }, [currentUser, navigate]);
+  }, [currentUser, authLoading, navigate]);
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -71,11 +78,11 @@ export default function UserManagement() {
       setIsLoading(false);
     }
   };  useEffect(() => {
-    if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin')) {
+    if (!authLoading && currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin')) {
       logger.info('UserManagement: Initializing fetchUsers');
       fetchUsers();
     }
-  }, [currentUser]);
+  }, [currentUser, authLoading]);
   const handleRoleChange = async (userId: number, newRole: string, targetUserRole: string) => {
     const token = localStorage.getItem('authToken');
     if (!token) {

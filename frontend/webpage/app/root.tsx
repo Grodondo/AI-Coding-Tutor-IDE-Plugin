@@ -52,17 +52,30 @@ export function Layout({ children }: { children: React.ReactNode }) {
 function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useContext(AuthContext);    useEffect(() => {
+  const { user, isLoading } = useContext(AuthContext);
+
+  useEffect(() => {
+    // Don't redirect if we're still loading the auth state
+    if (isLoading) {
+      return;
+    }
+    
     console.log('AppContent: Checking admin route', {
       pathname: location.pathname,
       user,
       isAdmin: user?.role === 'admin' || user?.role === 'superadmin',
+      isLoading,
     });
-    if (location.pathname.startsWith('/admin') && user?.role !== 'admin' && user?.role !== 'superadmin') {
-      console.log('AppContent: Redirecting to /auth/login');
+    
+    // Only redirect if we're sure the user is not an admin (i.e., auth check is complete)
+    if (location.pathname.startsWith('/admin') && !user) {
+      console.log('AppContent: Redirecting to /auth/login - no user');
+      navigate('/auth/login');
+    } else if (location.pathname.startsWith('/admin') && user && user.role !== 'admin' && user.role !== 'superadmin') {
+      console.log('AppContent: Redirecting to /auth/login - insufficient permissions');
       navigate('/auth/login');
     }
-  }, [location, user, navigate]);
+  }, [location, user, isLoading, navigate]);
 
   // Determine if navbar should be shown
   const shouldShowNavbar = () => {

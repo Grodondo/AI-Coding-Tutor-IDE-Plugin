@@ -8,28 +8,30 @@ interface User {
    role: string;
    profileImage?: string;
  }
- 
- interface AuthContextType {
+  interface AuthContextType {
    user: User | null;
    login: (token: string) => void;
    logout: () => void;
+   isLoading: boolean;
  }
  
  export const AuthContext = createContext<AuthContextType>({
    user: null,
    login: () => {},
    logout: () => {},
+   isLoading: true,
  });
  
  export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
    const [user, setUser] = useState<User | null>(null);
- 
+   const [isLoading, setIsLoading] = useState(true);
    const checkAuthStatus = () => {
      const token = localStorage.getItem('authToken');
      logger.info('AuthProvider: Checking auth status', { token: token ? '[present]' : '[missing]' });
      if (!token) {
        logger.warn('AuthProvider: No token found');
        setUser(null);
+       setIsLoading(false);
        return;
      }
      try {
@@ -38,6 +40,7 @@ interface User {
          logger.warn('AuthProvider: Invalid token payload', { decoded });
          setUser(null);
          localStorage.removeItem('authToken');
+         setIsLoading(false);
          return;
        }
        logger.info('AuthProvider: User decoded', {
@@ -45,10 +48,12 @@ interface User {
          role: decoded.role,
        });
        setUser(decoded);
+       setIsLoading(false);
      } catch (error) {
        logger.error('AuthProvider: Error decoding token', error);
        setUser(null);
        localStorage.removeItem('authToken');
+       setIsLoading(false);
      }
    };
  
@@ -58,7 +63,6 @@ interface User {
      window.addEventListener('storage', checkAuthStatus);
      return () => window.removeEventListener('storage', checkAuthStatus);
    }, []);
- 
    const login = (token: string) => {
      logger.info('AuthProvider: Logging in');
      localStorage.setItem('authToken', token);
@@ -67,6 +71,7 @@ interface User {
        if (!decoded.username || !decoded.role) {
          logger.warn('AuthProvider: Invalid login token payload', { decoded });
          localStorage.removeItem('authToken');
+         setIsLoading(false);
          return;
        }
        logger.info('AuthProvider: Login decoded', {
@@ -74,10 +79,12 @@ interface User {
          role: decoded.role,
        });
        setUser(decoded);
+       setIsLoading(false);
      } catch (error) {
        logger.error('AuthProvider: Login error', error);
        localStorage.removeItem('authToken');
        setUser(null);
+       setIsLoading(false);
      }
    };
  
@@ -86,9 +93,8 @@ interface User {
      localStorage.removeItem('authToken');
      setUser(null);
    };
- 
    return (
-     <AuthContext.Provider value={{ user, login, logout }}>
+     <AuthContext.Provider value={{ user, login, logout, isLoading }}>
        {children}
      </AuthContext.Provider>
    );
