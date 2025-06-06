@@ -16,11 +16,21 @@ export interface AIModel {
     // AI model temperature
     temperature?: number;
     prompts: Record<string,string>;
+    // API endpoint URL for the provider (new field)
+    api_url?: string;
   };
+}
+
+// Provider configuration from backend
+export interface ProviderConfig {
+  name: string;
+  default_url: string;
+  description: string;
 }
 
 export default function AdminSettings() {
   const [models, setModels] = useState<AIModel[]>([]);
+  const [supportedProviders, setSupportedProviders] = useState<ProviderConfig[]>([]);
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,8 +70,7 @@ export default function AdminSettings() {
       });
       if (response.ok) {
         const data = await response.json();
-        logger.info('AdminSettings: Raw API response', { data });
-        // Transform backend response to AIModel
+        logger.info('AdminSettings: Raw API response', { data });        // Transform backend response to AIModel
         const validModels: AIModel[] = Object.entries(data).map(
           ([service, cfg]: [string, any]) => ({
             service,
@@ -71,6 +80,7 @@ export default function AdminSettings() {
               encrypted_api_key: cfg.encrypted_api_key,
               api_key:           "",          
               prompts:           cfg.prompts,
+              api_url:           cfg.api_url || "", // Include API URL from backend
             }
           })
         );
@@ -93,10 +103,43 @@ export default function AdminSettings() {
     }
   };  useEffect(() => {
     if (!authLoading && user && (user.role === 'admin' || user.role === 'superadmin')) {
-      logger.info('AdminSettings: Initializing fetchModels');
+      logger.info('AdminSettings: Initializing fetchModels and fetchSupportedProviders');
       fetchModels();
+      fetchSupportedProviders();
     }
   }, [user, authLoading]);
+  const fetchSupportedProviders = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/api/v1/providers');
+      if (response.ok) {
+        const providers = await response.json();
+        logger.info('AdminSettings: Supported providers fetched', { count: providers.length });
+        setSupportedProviders(providers);
+      } else {
+        logger.warn('AdminSettings: Failed to fetch supported providers, using fallback');
+        // Use fallback providers when API fails
+        setFallbackProviders();
+      }
+    } catch (error) {
+      logger.error('AdminSettings: Error fetching supported providers', error);
+      // Use fallback providers when API fails
+      setFallbackProviders();
+    }
+  };
+
+  const setFallbackProviders = () => {
+    const fallbackProviders: ProviderConfig[] = [
+      { name: 'groq', default_url: 'https://api.groq.com/openai/v1', description: 'Fast inference with Groq LPU™' },
+      { name: 'openai', default_url: 'https://api.openai.com/v1', description: 'OpenAI GPT models' },
+      { name: 'anthropic', default_url: 'https://api.anthropic.com/v1', description: 'Anthropic Claude models' },
+      { name: 'azure-openai', default_url: 'https://your-resource.openai.azure.com/openai/deployments', description: 'Azure OpenAI Service' },
+      { name: 'cohere', default_url: 'https://api.cohere.ai/v1', description: 'Cohere language models' },
+      { name: 'huggingface', default_url: 'https://api-inference.huggingface.co/models', description: 'Hugging Face Inference API' },
+      { name: 'custom', default_url: '', description: 'Custom API endpoint' }
+    ];
+    setSupportedProviders(fallbackProviders);
+    logger.info('AdminSettings: Using fallback providers', { count: fallbackProviders.length });
+  };
 
   async function handleSave(model: AIModel) {
     const token = localStorage.getItem('authToken');
@@ -121,6 +164,7 @@ export default function AdminSettings() {
             api_key:     model.config.api_key,
             temperature: model.config.temperature,
             prompts:     model.config.prompts,
+            api_url:     model.config.api_url, // Include API URL in save request
           },
         }),
       });
@@ -181,6 +225,7 @@ export default function AdminSettings() {
         encrypted_api_key: '',
         api_key: '',
         prompts: { novice: '', medium: '', expert: '' },
+        api_url: '', // Initialize API URL for new models
       },
     };
     setModels([...models, newModel]);
@@ -243,9 +288,9 @@ export default function AdminSettings() {
                 key={model.service || index}
                 className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-200 dark:border-gray-700"
               >
-                {isEditing === model.service || (isEditing === 'new' && index === models.length - 1) ? (
-                  <ModelForm
+                {isEditing === model.service || (isEditing === 'new' && index === models.length - 1) ? (                  <ModelForm
                     model={model}
+                    supportedProviders={supportedProviders}
                     onSave={handleSave}
                     onCancel={() => {
                       setIsEditing(null);
@@ -272,14 +317,33 @@ export default function AdminSettings() {
 
 interface ModelFormProps {
   model: AIModel;
+  supportedProviders: ProviderConfig[];
   onSave: (model: AIModel) => void;
   onCancel: () => void;
 }
 
-const ModelForm: React.FC<ModelFormProps> = ({ model, onSave, onCancel }) => {
+const ModelForm: React.FC<ModelFormProps> = ({ model, supportedProviders, onSave, onCancel }) => {
   const [formModel, setFormModel] = useState<AIModel>(model);
   const [errors, setErrors] = useState<Partial<Record<keyof AIModel['config'] | 'service', string>>>({});
-  const validate = () => {
+  
+  // Handle provider selection and auto-populate API URL
+  const handleProviderChange = (providerName: string) => {
+    const provider = supportedProviders.find(p => p.name === providerName);
+    setFormModel({
+      ...formModel,
+      config: {
+        ...formModel.config,
+        ai_provider: providerName,
+        api_url: provider?.default_url || formModel.config.api_url || '',
+      },
+    });
+    // Clear provider-related errors
+    setErrors((prev) => ({ 
+      ...prev, 
+      ai_provider: undefined,
+      api_url: undefined,
+    }));
+  };  const validate = () => {
     const newErrors: Partial<Record<keyof AIModel['config'] | 'service', string>> = {};
     
     // Required field validations
@@ -305,6 +369,15 @@ const ModelForm: React.FC<ModelFormProps> = ({ model, onSave, onCancel }) => {
       newErrors.api_key = 'API Key is required';
     } else if (formModel.config.api_key.length < 10) {
       newErrors.api_key = 'API Key must be at least 10 characters';
+    }
+    
+    // API URL validation (optional but if provided, should be valid)
+    if (formModel.config.api_url && formModel.config.api_url.trim()) {
+      try {
+        new URL(formModel.config.api_url);
+      } catch {
+        newErrors.api_url = 'Please enter a valid URL (e.g., https://api.example.com)';
+      }
     }
     
     // Temperature validation
@@ -365,17 +438,51 @@ const ModelForm: React.FC<ModelFormProps> = ({ model, onSave, onCancel }) => {
           className={`mt-1 block w-full border ${errors.service ? 'border-red-500' : 'border-gray-300'} rounded-md p-2 focus:ring-blue-500 focus:border-blue-500`}
         />
         {errors.service && <p className="text-red-500 text-sm mt-1">{errors.service}</p>}
-      </div>
-      <div>
+      </div>      <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">AI Provider</label>
-        <input
-          type="text"
+        <select
           value={formModel.config.ai_provider}
-          onChange={(e) => handleInputChange('ai_provider', e.target.value)}
-          placeholder="e.g., groq"
-          className={`mt-1 block w-full border ${errors.ai_provider ? 'border-red-500' : 'border-gray-300'} rounded-md p-2 focus:ring-blue-500 focus:border-blue-500`}
-        />
+          onChange={(e) => handleProviderChange(e.target.value)}
+          className={`mt-1 block w-full border ${errors.ai_provider ? 'border-red-500' : 'border-gray-300'} rounded-md p-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 dark:text-white`}
+        >
+          <option value="">Select a provider...</option>
+          {supportedProviders.map((provider) => (
+            <option key={provider.name} value={provider.name}>
+              {provider.name} - {provider.description}
+            </option>
+          ))}
+          <option value="custom">Custom Provider</option>
+        </select>
         {errors.ai_provider && <p className="text-red-500 text-sm mt-1">{errors.ai_provider}</p>}
+        {formModel.config.ai_provider && (
+          <p className="text-xs text-gray-500 mt-1">
+            {supportedProviders.find(p => p.name === formModel.config.ai_provider)?.description || 'Custom provider configuration'}
+          </p>
+        )}
+      </div>
+      
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          API Endpoint URL
+          <span className="text-xs text-gray-500 ml-1">(Optional - uses provider default if empty)</span>
+        </label>
+        <input
+          type="url"
+          value={formModel.config.api_url || ''}
+          onChange={(e) => handleInputChange('api_url', e.target.value)}
+          placeholder={
+            formModel.config.ai_provider && supportedProviders.find(p => p.name === formModel.config.ai_provider)?.default_url 
+              ? supportedProviders.find(p => p.name === formModel.config.ai_provider)?.default_url
+              : "e.g., https://api.openai.com/v1"
+          }
+          className={`mt-1 block w-full border ${errors.api_url ? 'border-red-500' : 'border-gray-300'} rounded-md p-2 focus:ring-blue-500 focus:border-blue-500`}
+        />
+        {errors.api_url && <p className="text-red-500 text-sm mt-1">{errors.api_url}</p>}
+        {formModel.config.ai_provider && supportedProviders.find(p => p.name === formModel.config.ai_provider) && (
+          <p className="text-xs text-gray-500 mt-1">
+            Default: {supportedProviders.find(p => p.name === formModel.config.ai_provider)?.default_url}
+          </p>
+        )}
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">AI Model</label>
@@ -513,14 +620,20 @@ const ModelDisplay: React.FC<ModelDisplayProps> = ({ model, onEdit, onDelete }) 
               <span className="font-medium text-gray-700 dark:text-gray-300 w-20">Model:</span>
               <span className="text-gray-600 dark:text-gray-400">{model.config.ai_model || 'N/A'}</span>
             </div>
-          </div>
-          <div className="space-y-2">
+          </div>          <div className="space-y-2">
             <div className="flex items-center">
               <span className="font-medium text-gray-700 dark:text-gray-300 w-24">Temperature:</span>
               <span className="text-gray-600 dark:text-gray-400">
                 {model.config.temperature !== undefined ? model.config.temperature : '0.7 (default)'}
               </span>
-            </div>            <div className="flex items-center">
+            </div>
+            <div className="flex items-center">
+              <span className="font-medium text-gray-700 dark:text-gray-300 w-24">API URL:</span>
+              <span className="text-gray-600 dark:text-gray-400 font-mono text-xs">
+                {model.config.api_url ? model.config.api_url : 'Default provider URL'}
+              </span>
+            </div>
+            <div className="flex items-center">
               <span className="font-medium text-gray-700 dark:text-gray-300 w-24">API Key:</span>
               <span className="text-gray-600 dark:text-gray-400 font-mono text-xs">
                 {model.config.encrypted_api_key ? '••••••••••••••••' : 'Not configured'}
