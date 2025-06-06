@@ -29,14 +29,13 @@ func (s *AIService) GetResponse(service string, provider string, model string, p
 		return "", fmt.Errorf("failed to get AI settings: %w", err)
 	}
 
-	switch provider {
-	case "groq":
-		return s.GetResponseGeneral(settings.APIKey, model, prompt, "https://api.groq.com/openai/v1/chat/completions", settings.Temperature)
-	case "openai":
-		return s.GetResponseGeneral(settings.APIKey, model, prompt, "https://api.openai.com/v1/chat/completions", settings.Temperature)
-	default:
-		return "", fmt.Errorf("unknown provider: %s", provider)
+	// Get the API URL for this provider (either custom or default)
+	apiURL := s.settingsService.GetProviderAPIURL(provider, settings)
+	if apiURL == "" {
+		return "", fmt.Errorf("no API URL configured for provider: %s", provider)
 	}
+
+	return s.GetResponseGeneral(settings.APIKey, model, prompt, apiURL, settings.Temperature)
 }
 
 func (s *AIService) GetResponseGeneral(apiKey string, model string, prompt string, url string, temperature *float64) (string, error) {

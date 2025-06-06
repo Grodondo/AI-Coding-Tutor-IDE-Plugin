@@ -204,3 +204,18 @@ func DeleteSettingsHandler(dbService *services.DBService, settingsService *servi
 		c.JSON(200, gin.H{"status": "success"})
 	}
 }
+
+// GetSupportedProvidersHandler godoc
+// @Summary   Get supported AI providers
+// @Description  Return the list of supported AI providers with their default configurations
+// @Tags      settings
+// @Produce   json
+// @Success   200  {array} services.ProviderConfig
+// @Router    /providers [get]
+func GetSupportedProvidersHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		providers := services.GetSupportedProviders()
+		logger.Log.Debugf("Retrieved %d supported providers", len(providers))
+		c.JSON(200, providers)
+	}
+}

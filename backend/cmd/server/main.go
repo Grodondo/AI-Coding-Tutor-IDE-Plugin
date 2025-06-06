@@ -99,6 +99,7 @@ func main() {
 	router.GET("api/v1/settings", middleware.AuthMiddleware(), handlers.GetSettingsHandler(dbService, settingsService))
 	router.POST("api/v1/settings", middleware.AuthMiddleware(), handlers.UpdateSettingsHandler(dbService, settingsService))
 	router.DELETE("api/v1/settings/:service", middleware.AuthMiddleware(), handlers.DeleteSettingsHandler(dbService, settingsService))
+	router.GET("api/v1/providers", handlers.GetSupportedProvidersHandler())
 	router.GET("api/v1/profile", middleware.AuthMiddleware(), handlers.ProfileHandler(dbService))
 	router.POST("api/v1/query", handlers.QueryHandler(aiService, dbService, settingsService))
 	router.POST("api/v1/analyze", handlers.AnalyzeHandler(aiService, dbService, settingsService))
