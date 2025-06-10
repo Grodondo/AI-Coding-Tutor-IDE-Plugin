@@ -1,5 +1,31 @@
 basePath: /api/v1
 definitions:
+  handlers.AiSettingsResponse:
+    description: AI settings configuration for a service
+    properties:
+      ai_model:
+        example: mixtral-8x7b-32768
+        type: string
+      ai_provider:
+        example: groq
+        type: string
+      api_url:
+        example: https://api.groq.com/openai/v1/chat/completions
+        type: string
+      encrypted_api_key:
+        example: encrypted_key_data
+        type: string
+      prompts:
+        additionalProperties:
+          type: string
+        example:
+          expert: Detailed analysis
+          novice: Simple explanation
+        type: object
+      temperature:
+        example: 0.7
+        type: number
+    type: object
   handlers.AnalyzeRequest:
     description: Request structure for code analysis
     properties:
@@ -8,6 +34,9 @@ definitions:
           def hello_world():
               print('Hello, World!')
         type: string
+      includeLineNumbers:
+        example: true
+        type: boolean
       level:
         enum:
         - beginner
@@ -23,11 +52,8 @@ definitions:
     description: Response structure for code analysis results
     properties:
       suggestions:
-        example:
-        - '[''Consider adding docstring to the function'''
-        - ' ''Follow PEP 8 naming conventions'']'
         items:
-          type: string
+          $ref: '#/definitions/handlers.Suggestion'
         type: array
     type: object
   handlers.FeedbackRequest:
@@ -60,9 +86,38 @@ definitions:
     - password
     - username
     type: object
+  handlers.ProfileResponse:
+    properties:
+      createdAt:
+        type: string
+      email:
+        type: string
+      firstName:
+        type: string
+      lastName:
+        type: string
+      role:
+        type: string
+      username:
+        type: string
+    type: object
+  handlers.ProviderConfigResponse:
+    description: Configuration for supported AI providers
+    properties:
+      default_url:
+        example: https://api.groq.com/openai/v1/chat/completions
+        type: string
+      description:
+        example: Groq API for fast LLM inference
+        type: string
+      name:
+        example: groq
+        type: string
+    type: object
   handlers.QueryRequest:
     description: Query request structure for AI interactions
     properties:
+      context: {}
       level:
         enum:
         - beginner
@@ -89,16 +144,22 @@ definitions:
         type: string
     type: object
   handlers.RegisterRequest:
+    description: Registration request structure
     properties:
       email:
+        example: john.doe@example.com
         type: string
       firstName:
+        example: John
         type: string
       lastName:
+        example: Doe
         type: string
       password:
+        example: SecurePass123!
         type: string
       username:
+        example: johndoe
         type: string
     required:
     - email
@@ -107,21 +168,62 @@ definitions:
     - password
     - username
     type: object
-  handlers.Settings:
-    description: AI settings configuration
+  handlers.ServiceConfig:
     properties:
-      model:
-        example: gpt-3.5-turbo
-        type: string
-      prompts:
-        additionalProperties:
-          type: string
-        example:
-          '''intermediate''': '''Provide detailed analysis...''}'
-          '{''beginner''': '''Explain in simple terms...'''
+      config:
+        description: |-
+          config for this service
+          required: true
+        properties:
+          ai_model:
+            description: |-
+              model identifier
+              required: true
+            type: string
+          ai_provider:
+            description: |-
+              which AI provider to use
+              required: true
+            type: string
+          api_key:
+            description: |-
+              raw API key; server will encrypt this
+              required: true
+            type: string
+          api_url:
+            description: API endpoint URL for the provider
+            type: string
+          prompts:
+            additionalProperties:
+              type: string
+            description: named prompts
+            type: object
+          temperature:
+            description: AI model temperature
+            type: number
         type: object
-      provider:
-        example: openai
+      service:
+        description: |-
+          the unique service name, e.g. "query"
+          required: true
+        type: string
+    type: object
+  handlers.Suggestion:
+    description: Individual suggestion from code analysis
+    properties:
+      diff:
+        example: |-
+          - old_code
+          + new_code
+        type: string
+      explanation:
+        example: Adding a docstring improves code readability
+        type: string
+      line:
+        example: 0
+        type: integer
+      message:
+        example: Consider adding docstring
         type: string
     type: object
 host: localhost:8080
@@ -138,7 +240,7 @@ info:
   title: AI Coding Tutor API
   version: "1.0"
 paths:
-  /api/v1/analyze:
+  /analyze:
     post:
       consumes:
       - application/json
@@ -146,7 +248,7 @@ paths:
       parameters:
       - description: Code to analyze
         in: body
-        name: code
+        name: request
         required: true
         schema:
           $ref: '#/definitions/handlers.AnalyzeRequest'
@@ -158,13 +260,13 @@ paths:
           schema:
             $ref: '#/definitions/handlers.AnalyzeResponse'
         "400":
-          description: Invalid request format
+          description: Invalid request format or level
           schema:
             additionalProperties:
               type: string
             type: object
         "500":
-          description: Internal server error
+          description: Server error
           schema:
             additionalProperties:
               type: string
@@ -284,6 +386,48 @@ paths:
       summary: User login
       tags:
       - authentication
+  /profile:
+    get:
+      description: Get the authenticated user's profile information
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ProfileResponse'
+        "401":
+          description: 'Example: {''error'': ''Unauthorized''}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'Example: {''error'': ''Internal server error''}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get user profile
+      tags:
+      - authentication
+  /providers:
+    get:
+      description: Return the list of supported AI providers with their default configurations
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handlers.ProviderConfigResponse'
+            type: array
+      summary: Get supported AI providers
+      tags:
+      - settings
   /register:
     post:
       consumes:
@@ -324,27 +468,83 @@ paths:
       - authentication
   /settings:
     get:
-      consumes:
-      - application/json
-      description: Update the AI provider, model and prompts configuration
-      parameters:
-      - description: AI settings configuration
-        in: body
-        name: settings
-        required: true
-        schema:
-          $ref: '#/definitions/handlers.Settings'
+      description: 'Return for each service: provider, model, encrypted_api_key, and
+        prompts'
       produces:
       - application/json
       responses:
         "200":
-          description: Settings updated successfully
+          description: OK
+          schema:
+            additionalProperties:
+              $ref: '#/definitions/handlers.AiSettingsResponse'
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get AI settings
+      tags:
+      - settings
+    post:
+      consumes:
+      - application/json
+      description: Accepts raw api_key; server will encrypt it and store under encrypted_api_key
+      parameters:
+      - description: Service configuration update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ServiceConfig'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'status: success'
           schema:
             additionalProperties:
               type: string
             type: object
         "400":
-          description: Invalid settings format
+          description: Invalid request format or missing api_key
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Server error encrypting or saving
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update AI settings
+      tags:
+      - settings
+  /settings/{service}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete the AI settings for a specific service
+      parameters:
+      - description: Service name
+        in: path
+        name: service
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Settings deleted successfully
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request format
           schema:
             additionalProperties:
               type: string
@@ -355,7 +555,7 @@ paths:
             additionalProperties:
               type: string
             type: object
-      summary: Update AI settings
+      summary: Delete AI settings
       tags:
       - settings
   /verify-token:

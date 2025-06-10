@@ -24,7 +24,7 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api/v1/analyze": {
+        "/analyze": {
             "post": {
                 "description": "Analyze code for best practices, improvements, and potential issues",
                 "consumes": [
@@ -40,7 +40,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "description": "Code to analyze",
-                        "name": "code",
+                        "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
@@ -56,7 +56,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid request format",
+                        "description": "Invalid request format or level",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -65,7 +65,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "Internal server error",
+                        "description": "Server error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -245,6 +245,72 @@ const docTemplate = `{
                 }
             }
         },
+        "/profile": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get the authenticated user's profile information",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "authentication"
+                ],
+                "summary": "Get user profile",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ProfileResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Example: {'error': 'Unauthorized'}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Example: {'error': 'Internal server error'}",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/providers": {
+            "get": {
+                "description": "Return the list of supported AI providers with their default configurations",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Get supported AI providers",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/handlers.ProviderConfigResponse"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/register": {
             "post": {
                 "description": "Register a new user with their details",
@@ -302,7 +368,37 @@ const docTemplate = `{
         },
         "/settings": {
             "get": {
-                "description": "Update the AI provider, model and prompts configuration",
+                "description": "Return for each service: provider, model, encrypted_api_key, and prompts",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Get AI settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "$ref": "#/definitions/handlers.AiSettingsResponse"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Accepts raw api_key; server will encrypt it and store under encrypted_api_key",
                 "consumes": [
                     "application/json"
                 ],
@@ -315,18 +411,18 @@ const docTemplate = `{
                 "summary": "Update AI settings",
                 "parameters": [
                     {
-                        "description": "AI settings configuration",
-                        "name": "settings",
+                        "description": "Service configuration update request",
+                        "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/handlers.Settings"
+                            "$ref": "#/definitions/handlers.ServiceConfig"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Settings updated successfully",
+                        "description": "status: success",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -335,7 +431,60 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid settings format",
+                        "description": "Invalid request format or missing api_key",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Server error encrypting or saving",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/settings/{service}": {
+            "delete": {
+                "description": "Delete the AI settings for a specific service",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "settings"
+                ],
+                "summary": "Delete AI settings",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Service name",
+                        "name": "service",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Settings deleted successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request format",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -395,6 +544,42 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "handlers.AiSettingsResponse": {
+            "description": "AI settings configuration for a service",
+            "type": "object",
+            "properties": {
+                "ai_model": {
+                    "type": "string",
+                    "example": "mixtral-8x7b-32768"
+                },
+                "ai_provider": {
+                    "type": "string",
+                    "example": "groq"
+                },
+                "api_url": {
+                    "type": "string",
+                    "example": "https://api.groq.com/openai/v1/chat/completions"
+                },
+                "encrypted_api_key": {
+                    "type": "string",
+                    "example": "encrypted_key_data"
+                },
+                "prompts": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    },
+                    "example": {
+                        "expert": "Detailed analysis",
+                        "novice": "Simple explanation"
+                    }
+                },
+                "temperature": {
+                    "type": "number",
+                    "example": 0.7
+                }
+            }
+        },
         "handlers.AnalyzeRequest": {
             "description": "Request structure for code analysis",
             "type": "object",
@@ -406,6 +591,10 @@ const docTemplate = `{
                 "code": {
                     "type": "string",
                     "example": "def hello_world():\n    print('Hello, World!')"
+                },
+                "includeLineNumbers": {
+                    "type": "boolean",
+                    "example": true
                 },
                 "level": {
                     "type": "string",
@@ -425,12 +614,8 @@ const docTemplate = `{
                 "suggestions": {
                     "type": "array",
                     "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "['Consider adding docstring to the function'",
-                        " 'Follow PEP 8 naming conventions']"
-                    ]
+                        "$ref": "#/definitions/handlers.Suggestion"
+                    }
                 }
             }
         },
@@ -475,6 +660,47 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.ProfileResponse": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "firstName": {
+                    "type": "string"
+                },
+                "lastName": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.ProviderConfigResponse": {
+            "description": "Configuration for supported AI providers",
+            "type": "object",
+            "properties": {
+                "default_url": {
+                    "type": "string",
+                    "example": "https://api.groq.com/openai/v1/chat/completions"
+                },
+                "description": {
+                    "type": "string",
+                    "example": "Groq API for fast LLM inference"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "groq"
+                }
+            }
+        },
         "handlers.QueryRequest": {
             "description": "Query request structure for AI interactions",
             "type": "object",
@@ -483,6 +709,7 @@ const docTemplate = `{
                 "query"
             ],
             "properties": {
+                "context": {},
                 "level": {
                     "type": "string",
                     "enum": [
@@ -513,6 +740,7 @@ const docTemplate = `{
             }
         },
         "handlers.RegisterRequest": {
+            "description": "Registration request structure",
             "type": "object",
             "required": [
                 "email",
@@ -523,43 +751,88 @@ const docTemplate = `{
             ],
             "properties": {
                 "email": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "john.doe@example.com"
                 },
                 "firstName": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "John"
                 },
                 "lastName": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Doe"
                 },
                 "password": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "SecurePass123!"
                 },
                 "username": {
+                    "type": "string",
+                    "example": "johndoe"
+                }
+            }
+        },
+        "handlers.ServiceConfig": {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "description": "config for this service\nrequired: true",
+                    "type": "object",
+                    "properties": {
+                        "ai_model": {
+                            "description": "model identifier\nrequired: true",
+                            "type": "string"
+                        },
+                        "ai_provider": {
+                            "description": "which AI provider to use\nrequired: true",
+                            "type": "string"
+                        },
+                        "api_key": {
+                            "description": "raw API key; server will encrypt this\nrequired: true",
+                            "type": "string"
+                        },
+                        "api_url": {
+                            "description": "API endpoint URL for the provider",
+                            "type": "string"
+                        },
+                        "prompts": {
+                            "description": "named prompts",
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        },
+                        "temperature": {
+                            "description": "AI model temperature",
+                            "type": "number"
+                        }
+                    }
+                },
+                "service": {
+                    "description": "the unique service name, e.g. \"query\"\nrequired: true",
                     "type": "string"
                 }
             }
         },
-        "handlers.Settings": {
-            "description": "AI settings configuration",
+        "handlers.Suggestion": {
+            "description": "Individual suggestion from code analysis",
             "type": "object",
             "properties": {
-                "model": {
+                "diff": {
                     "type": "string",
-                    "example": "gpt-3.5-turbo"
+                    "example": "- old_code\n+ new_code"
                 },
-                "prompts": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    },
-                    "example": {
-                        "'intermediate'": "'Provide detailed analysis...'}",
-                        "{'beginner'": "'Explain in simple terms...'"
-                    }
-                },
-                "provider": {
+                "explanation": {
                     "type": "string",
-                    "example": "openai"
+                    "example": "Adding a docstring improves code readability"
+                },
+                "line": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Consider adding docstring"
                 }
             }
         }

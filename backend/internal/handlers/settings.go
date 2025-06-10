@@ -32,7 +32,28 @@ type ServiceConfig struct {
 		Temperature *float64 `json:"temperature,omitempty"`
 		// named prompts
 		Prompts map[string]string `json:"prompts"`
+		// API endpoint URL for the provider
+		APIURL string `json:"api_url,omitempty"`
 	} `json:"config"`
+}
+
+// AiSettingsResponse represents the AI settings returned to client
+// @Description AI settings configuration for a service
+type AiSettingsResponse struct {
+	AIProvider      string            `json:"ai_provider" example:"groq"`
+	AIModel         string            `json:"ai_model" example:"mixtral-8x7b-32768"`
+	EncryptedAPIKey string            `json:"encrypted_api_key" example:"encrypted_key_data"`
+	Temperature     *float64          `json:"temperature,omitempty" example:"0.7"`
+	Prompts         map[string]string `json:"prompts" example:"novice:Simple explanation,expert:Detailed analysis"`
+	APIURL          string            `json:"api_url,omitempty" example:"https://api.groq.com/openai/v1/chat/completions"`
+}
+
+// ProviderConfigResponse represents supported provider configuration
+// @Description Configuration for supported AI providers
+type ProviderConfigResponse struct {
+	Name        string `json:"name" example:"groq"`
+	DefaultURL  string `json:"default_url" example:"https://api.groq.com/openai/v1/chat/completions"`
+	Description string `json:"description" example:"Groq API for fast LLM inference"`
 }
 
 // GetSettingsHandler godoc
@@ -40,7 +61,7 @@ type ServiceConfig struct {
 // @Description  Return for each service: provider, model, encrypted_api_key, and prompts
 // @Tags      settings
 // @Produce   json
-// @Success   200  {object} map[string]*services.AiSettings
+// @Success   200  {object} map[string]AiSettingsResponse
 // @Failure   500  {object} map[string]string
 // @Router    /settings [get]
 func GetSettingsHandler(dbService *services.DBService, settingsService *services.SettingsService) gin.HandlerFunc {
@@ -210,7 +231,7 @@ func DeleteSettingsHandler(dbService *services.DBService, settingsService *servi
 // @Description  Return the list of supported AI providers with their default configurations
 // @Tags      settings
 // @Produce   json
-// @Success   200  {array} services.ProviderConfig
+// @Success   200  {array} ProviderConfigResponse
 // @Router    /providers [get]
 func GetSupportedProvidersHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {

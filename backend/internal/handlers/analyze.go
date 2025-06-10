@@ -18,10 +18,19 @@ type AnalyzeRequest struct {
 	IncludeLineNumbers bool   `json:"includeLineNumbers" example:"true"`
 }
 
+// Suggestion represents a single code analysis suggestion
+// @Description Individual suggestion from code analysis
+type Suggestion struct {
+	Line        int    `json:"line" example:"0"`
+	Message     string `json:"message" example:"Consider adding docstring"`
+	Explanation string `json:"explanation" example:"Adding a docstring improves code readability"`
+	Diff        string `json:"diff,omitempty" example:"- old_code\n+ new_code"`
+}
+
 // AnalyzeResponse defines the structure for code analysis responses
 // @Description Response structure for code analysis results
 type AnalyzeResponse struct {
-	Suggestions []map[string]interface{} `json:"suggestions" example:"[{'line': 1, 'message': 'Consider adding docstring', 'explanation': 'Adding a docstring improves code readability'}]"`
+	Suggestions []Suggestion `json:"suggestions"`
 }
 
 // AnalyzeHandler godoc
@@ -107,8 +116,8 @@ func AnalyzeHandler(aiService *services.AIService, dbService *services.DBService
 }
 
 // parseAnalyzeResponse parses the AI response into a list of suggestions with line numbers
-func parseAnalyzeResponse(response string) []map[string]interface{} {
-	var suggestions []map[string]interface{}
+func parseAnalyzeResponse(response string) []Suggestion {
+	var suggestions []Suggestion
 
 	// Split the response into sections by line numbers
 	linePattern := regexp.MustCompile(`(?m)^Line (\d+):(.+)$`)
@@ -170,16 +179,15 @@ func parseAnalyzeResponse(response string) []map[string]interface{} {
 		}
 
 		explanation = strings.TrimSpace(explanation)
-
 		// Create the suggestion
-		suggestion := map[string]interface{}{
-			"line":        lineNum - 1, // Adjust to zero-based index for VS Code
-			"message":     title,
-			"explanation": explanation,
+		suggestion := Suggestion{
+			Line:        lineNum - 1, // Adjust to zero-based index for VS Code
+			Message:     title,
+			Explanation: explanation,
 		}
 
 		if diff != "" {
-			suggestion["diff"] = diff
+			suggestion.Diff = diff
 		}
 
 		suggestions = append(suggestions, suggestion)
@@ -189,8 +197,8 @@ func parseAnalyzeResponse(response string) []map[string]interface{} {
 }
 
 // createFallbackSuggestions attempts to create suggestions when the AI doesn't format with line numbers
-func createFallbackSuggestions(response string, code string) []map[string]interface{} {
-	var suggestions []map[string]interface{}
+func createFallbackSuggestions(response string, code string) []Suggestion {
+	var suggestions []Suggestion
 
 	// Split the response into paragraphs
 	paragraphs := strings.Split(response, "\n\n")
@@ -232,12 +240,11 @@ func createFallbackSuggestions(response string, code string) []map[string]interf
 			// Try to find a reasonable position based on paragraph number
 			lineIndex = (len(codeLines) * i) / len(paragraphs)
 		}
-
 		// Create a suggestion
-		suggestion := map[string]interface{}{
-			"line":        lineIndex,
-			"message":     paragraphLines[0], // Use first line as message
-			"explanation": paragraph,         // Use full paragraph as explanation
+		suggestion := Suggestion{
+			Line:        lineIndex,
+			Message:     paragraphLines[0], // Use first line as message
+			Explanation: paragraph,         // Use full paragraph as explanation
 		}
 
 		suggestions = append(suggestions, suggestion)
