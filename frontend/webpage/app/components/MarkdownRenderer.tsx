@@ -41,7 +41,8 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
       const cleanHtml = DOMPurify.sanitize(htmlString, purifyOptions);
       
       return cleanHtml;
-    } catch (error) {
+    } 
+    catch (error) {
       console.error('Error rendering markdown:', error);
       return markdown; // Fallback to plain text
     }
